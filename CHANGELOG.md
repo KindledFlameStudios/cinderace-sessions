@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0 — 2026-03-20
+
+### Added
+- **Session picker** — choose which session to export from a searchable list
+- **Session title display** — shows user-renamed session names (via `custom-title` records)
+- **First message preview** — unnamed sessions show the opening message for easy identification
+- Session date and size shown in picker for quick context
+- `SessionEntrypoint` type tracking (cli, vscode, legacy)
+
+### Fixed
+- CLI sessions no longer hijack "Export Current" when running Claude Code in both terminal and VSCode
+- Local command stubs (`<local-command-caveat>`) no longer appear as exportable sessions
+- Content block array format now parsed correctly for preview extraction (was only handling string format)
+
+### Changed
+- `findActiveSession` now filters by entrypoint and content type
+- `SessionMeta` includes `entrypoint` field in exports
+- Increased head buffer from 8KB to 16KB for more reliable first-message detection
+
 ## 0.3.1 — 2026-02-25
 
 ### Added

@@ -10,6 +10,7 @@ import {
   findTranscriptsDir,
   findActiveSession,
   getRecentSessions,
+  getExportableSessions,
 } from './sessionDetector';
 import {
   getOutputDirectory,
@@ -182,7 +183,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // --- Commands ---
 
-  // Export Current Session
+  // Export Current Session (with session picker)
   context.subscriptions.push(
     vscode.commands.registerCommand('cinderaceSessions.exportCurrent', async () => {
       const transcriptsDir = findTranscriptsDir();
@@ -193,14 +194,38 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
 
-      const active = findActiveSession(transcriptsDir);
-      if (!active) {
-        vscode.window.showWarningMessage('CinderACE Sessions: No active session found.');
+      // Build list of exportable sessions
+      const sessions = getExportableSessions(transcriptsDir, 20);
+      if (sessions.length === 0) {
+        vscode.window.showWarningMessage('CinderACE Sessions: No exportable sessions found.');
         return;
       }
 
+      // If only one session, use it directly. Otherwise show picker.
+      let selectedPath: string;
+
+      if (sessions.length === 1) {
+        selectedPath = sessions[0].filepath;
+      } else {
+        const pickerItems = sessions.map((s) => ({
+          label: s.title || s.preview.substring(0, 60) || s.date,
+          description: `${s.date}  ·  ${s.size}`,
+          detail: s.title ? s.preview : undefined,
+          filepath: s.filepath,
+        }));
+
+        const picked = await vscode.window.showQuickPick(pickerItems, {
+          placeHolder: 'Select a session to export',
+          title: 'CinderACE Sessions — Choose Session',
+          matchOnDescription: true,
+        });
+
+        if (!picked) return;
+        selectedPath = picked.filepath;
+      }
+
       // Step 1: Custom name
-      const meta = extractSessionMeta(active);
+      const meta = extractSessionMeta(selectedPath);
       const defaultName = meta.slug || meta.sessionId;
 
       const customName = await vscode.window.showInputBox({
@@ -222,7 +247,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // Step 4: Export
       statusBar.text = '$(sync~spin) Exporting...';
 
-      const success = await exportFile(active, outputDir, formats, customName || undefined);
+      const success = await exportFile(selectedPath, outputDir, formats, customName || undefined);
 
       if (success) {
         const timeStr = formatShortTime(new Date());

@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { ContentBlock, Turn, SessionStats, SessionMeta } from './types';
+import { ContentBlock, Turn, SessionStats, SessionMeta, SessionEntrypoint } from './types';
 
 /**
  * Parse a Claude Code JSONL transcript file into structured turns.
@@ -132,6 +132,7 @@ export function extractSessionMeta(filepath: string): SessionMeta {
   let sessionId = '';
   let slug = '';
   let firstDate = '';
+  let entrypoint: SessionEntrypoint = 'unknown';
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -148,8 +149,13 @@ export function extractSessionMeta(filepath: string): SessionMeta {
       if (!firstDate && record.timestamp) {
         firstDate = record.timestamp.substring(0, 10); // YYYY-MM-DD
       }
+      if (entrypoint === 'unknown' && record.entrypoint) {
+        entrypoint = record.entrypoint === 'cli' ? 'cli'
+          : record.entrypoint === 'claude-vscode' ? 'claude-vscode'
+          : 'unknown';
+      }
       // Stop once we have all metadata
-      if (sessionId && slug && firstDate) break;
+      if (sessionId && slug && firstDate && entrypoint !== 'unknown') break;
     } catch {
       continue;
     }
@@ -165,5 +171,5 @@ export function extractSessionMeta(filepath: string): SessionMeta {
     firstDate = new Date().toISOString().substring(0, 10);
   }
 
-  return { sessionId, slug, firstDate };
+  return { sessionId, slug, firstDate, entrypoint };
 }

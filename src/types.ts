@@ -27,11 +27,15 @@ export interface SessionStats {
   lastTimestamp: string | null;
 }
 
+/** Known Claude Code session entrypoints. */
+export type SessionEntrypoint = 'cli' | 'claude-vscode' | 'unknown';
+
 /** Metadata extracted from the first message of a session. */
 export interface SessionMeta {
   sessionId: string;
   slug: string;
   firstDate: string; // YYYY-MM-DD
+  entrypoint: SessionEntrypoint;
 }
 
 /** Export mode configuration. */

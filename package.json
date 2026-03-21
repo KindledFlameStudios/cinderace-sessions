@@ -2,7 +2,7 @@
   "name": "cinderace-sessions",
   "displayName": "CinderACE Sessions — Claude Code Exporter",
   "description": "Export Claude Code sessions as markdown, HTML, JSON, JSONL, or ZIP — full conversation preservation with CinderACE theming.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "cinderace",
   "license": "MIT",
   "icon": "resources/icon.png",
