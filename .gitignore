@@ -1,6 +1,16 @@
+# CinderACE - Sessions Fort
+# VS Code bridge protection.
+
 node_modules/
 out/
 *.vsix
 *.map
 .vscode/
 deploy.sh
+.env
+.env.*
+.claude/
+.cline/
+*.log
+.DS_Store
+pushgit.sh
