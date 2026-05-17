@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CinderACE Sessions</title>
+<style>
+{{CAS_CSS}}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <svg class="logo-flame" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13 2C13 2 7 8 7 14C7 17.3 9.7 20 13 20C16.3 20 19 17.3 19 14C19 8 13 2 13 2Z" fill="url(#cg1)"/>
+        <path d="M13 10C13 10 10 13.5 10 16C10 17.6 11.3 19 13 19C14.7 19 16 17.6 16 16C16 13.5 13 10 13 10Z" fill="url(#cg2)"/>
+        <defs>
+          <linearGradient id="cg1" x1="13" y1="2" x2="13" y2="20" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#FFD080"/>
+            <stop offset="100%" stop-color="#FF7820"/>
+          </linearGradient>
+          <linearGradient id="cg2" x1="13" y1="10" x2="13" y2="19" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#fff" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="#FFA040"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <span class="header-title">CinderACE Sessions</span>
+      <span class="header-sub">v2</span>
+    </div>
+    <div class="header-spacer"></div>
+    <button class="header-btn" id="btnRefresh" title="Refresh sessions">↻ Refresh</button>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="sessions">Sessions</button>
+    <button class="tab-btn" data-tab="projects">Projects</button>
+    <button class="tab-btn" data-tab="summarizer">Summarizer</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+    <button class="tab-btn" data-tab="clistatus">CLI Status</button>
+  </div>
+
+  <!-- ═══════════ SESSIONS TAB ═══════════ -->
+  <div class="content">
+    <div class="tab-panel active" id="tab-sessions">
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <button class="filter-btn active" data-range="all">All</button>
+          <button class="filter-btn" data-range="today">Today</button>
+          <button class="filter-btn" data-range="week">This Week</button>
+          <button class="filter-btn" data-range="month">This Month</button>
+        </div>
+        <select class="filter-select" id="cliFilter">
+          <option value="all">All CLIs</option>
+        </select>
+        <input type="text" class="filter-search" id="sessionSearch" placeholder="Search sessions..." />
+      </div>
+
+      <div class="split-pane">
+        <!-- Left: session list -->
+        <div class="session-list" id="sessionList">
+          <div class="empty-state" id="sessionsEmpty">
+            <div class="empty-icon">📂</div>
+            <div class="empty-text">Scanning for sessions...</div>
+          </div>
+        </div>
+
+        <!-- Right: session preview -->
+        <div class="session-preview" id="sessionPreview">
+          <div class="empty-state" id="previewEmpty">
+            <div class="empty-icon">📄</div>
+            <div class="empty-text">Select a session to preview</div>
+          </div>
+          <div class="preview-content" id="previewContent" style="display:none">
+            <div class="preview-header" id="previewHeader"></div>
+            <div class="preview-actions" id="previewActions">
+              <select class="action-select" id="exportFormat">
+                <option value="md">Markdown</option>
+                <option value="html">HTML</option>
+                <option value="json">JSON</option>
+                <option value="jsonl">JSONL</option>
+                <option value="zip">ZIP (all formats)</option>
+              </select>
+              <button class="action-btn primary" id="btnExport">Export</button>
+              <button class="action-btn" id="btnSummarize">Summarize</button>
+              <button class="action-btn" id="btnIngest">Ingest to ember-memory</button>
+            </div>
+            <div class="preview-body" id="previewBody"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ PROJECTS TAB ═══════════ -->
+    <div class="tab-panel" id="tab-projects">
+
+      <div class="split-pane">
+        <div class="project-list" id="projectList">
+          <div class="empty-state">
+            <div class="empty-icon">📁</div>
+            <div class="empty-text">Loading projects...</div>
+          </div>
+        </div>
+        <div class="project-sessions" id="projectSessions">
+          <div class="empty-state">
+            <div class="empty-icon">📁</div>
+            <div class="empty-text">Select a project</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SUMMARIZER TAB ═══════════ -->
+    <div class="tab-panel" id="tab-summarizer">
+
+      <div class="section">
+        <div class="section-title">Provider</div>
+        <div class="form-row">
+          <label class="form-label">Endpoint</label>
+          <select class="form-select" id="summarizerProvider">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="ollama">Ollama (local)</option>
+            <option value="custom">Custom URL</option>
+          </select>
+        </div>
+        <div class="form-row" id="customUrlRow" style="display:none">
+          <label class="form-label">Custom URL</label>
+          <input type="text" class="form-input" id="summarizerCustomUrl" placeholder="https://..." />
+        </div>
+        <div class="form-row">
+          <label class="form-label">API Key</label>
+          <input type="password" class="form-input" id="summarizerApiKey" placeholder="sk-..." />
+        </div>
+        <div class="form-row">
+          <label class="form-label">Model</label>
+          <input type="text" class="form-input" id="summarizerModel" placeholder="gpt-4o, claude-3.5-sonnet, etc." />
+        </div>
+        <div class="form-row">
+          <button class="action-btn" id="btnTestProvider">Test Connection</button>
+          <span class="status-text" id="providerStatus"></span>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Template</div>
+        <div class="form-row">
+          <select class="form-select" id="templateSelect">
+            <option value="default">Default Summary Template</option>
+          </select>
+          <button class="action-btn" id="btnNewTemplate">New</button>
+          <button class="action-btn" id="btnDeleteTemplate">Delete</button>
+        </div>
+        <textarea class="form-textarea" id="templateEditor" rows="12" placeholder="Summary template..."></textarea>
+        <div class="form-row">
+          <button class="action-btn primary" id="btnSaveTemplate">Save Template</button>
+          <button class="action-btn" id="btnResetTemplate">Reset to Default</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Summary History</div>
+        <div class="history-list" id="summaryHistory">
+          <div class="empty-state">
+            <div class="empty-icon">📝</div>
+            <div class="empty-text">No summaries yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ SETTINGS TAB ═══════════ -->
+    <div class="tab-panel" id="tab-settings">
+
+      <div class="section">
+        <div class="section-title">General</div>
+        <div class="form-row">
+          <label class="form-label">Output Directory</label>
+          <input type="text" class="form-input" id="outputDirectory" placeholder="Leave empty for prompt on export" />
+          <button class="action-btn" id="btnBrowseOutput">Browse</button>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Default Export Format</label>
+          <select class="form-select" id="defaultFormat">
+            <option value="md">Markdown</option>
+            <option value="html">HTML</option>
+            <option value="json">JSON</option>
+            <option value="jsonl">JSONL</option>
+            <option value="zip">ZIP (all formats)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Auto-detect on launch</label>
+          <input type="checkbox" id="autoDetect" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Display</div>
+        <div class="form-row">
+          <label class="form-label">HTML Theme</label>
+          <select class="form-select" id="htmlTheme">
+            <option value="ember">Ember (warm orange)</option>
+            <option value="dark">Dark (cool blue)</option>
+            <option value="light">Light (clean white)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Include thinking blocks</label>
+          <input type="checkbox" id="includeThinking" />
+        </div>
+        <div class="form-row">
+          <label class="form-label">Include tool calls</label>
+          <input type="checkbox" id="includeTools" />
+        </div>
+        <div class="form-row">
+          <label class="form-label">User label</label>
+          <input type="text" class="form-input" id="userLabel" value="User" />
+        </div>
+        <div class="form-row">
+          <label class="form-label">Assistant label</label>
+          <input type="text" class="form-input" id="assistantLabel" value="Assistant" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Custom CLIs</div>
+        <div class="cli-list" id="customCliList">
+          <div class="empty-state">No custom CLIs configured</div>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <button class="action-btn primary" id="btnAddCli">Add Custom CLI</button>
+        </div>
+        <!-- Add CLI form (hidden by default) -->
+        <div class="cli-form" id="cliForm" style="display:none">
+          <div class="form-row">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-input" id="cliName" placeholder="Fire Forge" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">Session Directory</label>
+            <input type="text" class="form-input" id="cliDirectory" placeholder="/path/to/sessions" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">Format</label>
+            <select class="form-select" id="cliFormat">
+              <option value="jsonl">JSONL</option>
+              <option value="json">JSON</option>
+              <option value="markdown">Markdown</option>
+              <option value="text">Plain Text</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Badge Color</label>
+            <input type="color" id="cliColor" value="#FF7820" />
+          </div>
+          <div class="form-row">
+            <button class="action-btn primary" id="btnSaveCli">Save</button>
+            <button class="action-btn" id="btnCancelCli">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">ember-memory</div>
+        <div class="form-row">
+          <div class="status-indicator" id="emberStatus">
+            <div class="engine-dot" id="emberDot"></div>
+            <span id="emberStatusLabel">Checking...</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Default collection</label>
+          <input type="text" class="form-input" id="emberCollection" value="general" />
+        </div>
+      </div>
+
+      <div class="section">
+        <button class="action-btn primary" id="btnSaveSettings">Save Settings</button>
+        <span class="status-text" id="settingsStatus"></span>
+      </div>
+    </div>
+
+    <!-- ═══════════ CLI STATUS TAB ═══════════ -->
+    <div class="tab-panel" id="tab-clistatus">
+
+      <div class="cli-status-list" id="cliStatusList">
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <div class="empty-text">Detecting CLIs...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+{{CAS_JS}}
+</script>
+</body>
+</html>

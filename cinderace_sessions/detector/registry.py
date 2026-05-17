@@ -180,12 +180,30 @@ class DetectorRegistry:
     def scan_all(self) -> list[SessionInfo]:
         """Run all enabled detectors and return a unified session list.
 
+        Calls detect() on each detector before scanning to ensure
+        availability is current. Skips detectors that aren't found
+        and custom detectors that are disabled.
         Results are sorted by modification time (newest first).
         """
         all_sessions: list[SessionInfo] = []
 
-        for detector in self.all_detectors:
+        for detector in self._built_in:
             try:
+                detector.detect()
+                if not detector.is_available:
+                    continue
+                sessions = detector.find_sessions()
+                all_sessions.extend(sessions)
+            except Exception:
+                continue
+
+        for detector in self._custom:
+            try:
+                if not detector.enabled:
+                    continue
+                detector.detect()
+                if not detector.is_available:
+                    continue
                 sessions = detector.find_sessions()
                 all_sessions.extend(sessions)
             except Exception:
