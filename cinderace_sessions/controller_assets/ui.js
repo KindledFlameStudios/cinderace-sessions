@@ -300,7 +300,7 @@ async function selectSession(filepath) {
   currentSession = detail;
   renderSessionList();  // Re-render to update selection
 
-  const preview = $('#sessionPreview');
+  const previewPane = $('#sessionPreview');
   const empty = $('#previewEmpty');
   const content = $('#previewContent');
   const header = $('#previewHeader');
@@ -315,7 +315,7 @@ async function selectSession(filepath) {
   `;
 
   // Render a quick markdown-like preview
-  let preview = '';
+  let previewText = '';
   const maxTurns = 20;
   const turns = detail.turns.slice(0, maxTurns);
   for (const turn of turns) {
@@ -326,14 +326,14 @@ async function selectSession(filepath) {
       .join('\n')
       .trim();
     if (text) {
-      preview += `\n${role} ${turn.role === 'user' ? 'User' : 'Assistant'}:\n${text.substring(0, 500)}\n`;
+      previewText += `\n${role} ${turn.role === 'user' ? 'User' : 'Assistant'}:\n${text.substring(0, 500)}\n`;
     }
   }
   if (detail.turns.length > maxTurns) {
-    preview += `\n... and ${detail.turns.length - maxTurns} more turns`;
+    previewText += `\n... and ${detail.turns.length - maxTurns} more turns`;
   }
 
-  body.textContent = preview;
+  body.textContent = previewText;
 }
 
 // ── Export ──────────────────────────────────────────────────────────
