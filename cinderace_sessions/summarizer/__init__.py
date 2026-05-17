@@ -1,0 +1,1 @@
+"""CinderACE Sessions v2 — LLM summarization modules."""

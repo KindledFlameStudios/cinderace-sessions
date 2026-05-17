@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cinderace-sessions"
+version = "2.0.0"
+description = "Discover, browse, export, and summarize AI CLI conversation sessions."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Kindled Flame Studios", email = "support@kindledflamestudios.com" }
+]
+dependencies = [
+  "pywebview>=5.0; sys_platform != 'linux'",
+  "pywebview[qt]>=5.0; sys_platform == 'linux'",
+  "pystray>=0.19.5",
+  "requests>=2.31.0",
+  "Pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.scripts]
+cinderace-sessions = "cinderace_sessions.__main__:main"
+
+[project.gui-scripts]
+cinderace-sessions-controller = "cinderace_sessions.__main__:launch_controller"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["cinderace_sessions*", "controller*"]
+
+[tool.setuptools.package-data]
+"cinderace_sessions.controller_assets" = ["ui.html", "ui.css", "ui.js"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"

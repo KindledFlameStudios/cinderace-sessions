@@ -1,0 +1,1 @@
+"""CinderACE Sessions v2 — system tray controller package."""

@@ -14,3 +14,8 @@ deploy.sh
 *.log
 .DS_Store
 pushgit.sh
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
