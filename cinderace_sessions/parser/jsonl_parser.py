@@ -25,9 +25,9 @@ from cinderace_sessions.parser.base import (
 def parse_jsonl_transcript(filepath: str) -> list[Turn]:
     """Parse a JSONL session file into a list of Turn objects.
 
-    Each line is an independent JSON object. Empty lines are skipped.
-    Malformed JSON lines are silently skipped.
-    Only records with type == 'user' or 'assistant' are kept.
+    Supports both Claude Code format (type=user/assistant) and
+    Codex format (type=response_item with payload).
+    Empty lines are skipped. Malformed JSON lines are silently skipped.
     Content is normalized: string → [{type: 'text', text: str}].
     """
     turns: list[Turn] = []
@@ -44,34 +44,50 @@ def parse_jsonl_transcript(filepath: str) -> list[Turn]:
                 except json.JSONDecodeError:
                     continue
 
-                # Only process user/assistant message records
                 record_type = record.get("type", "")
-                if record_type not in ("user", "assistant"):
-                    continue
 
-                message = record.get("message", {})
-                role = message.get("role", "")
+                # ── Claude Code format: type == "user" | "assistant" ──
+                if record_type in ("user", "assistant"):
+                    message = record.get("message", {})
+                    role = message.get("role", "")
+                    if role not in ("user", "assistant"):
+                        continue
+                    content = message.get("content")
+                    blocks = _normalize_content(content)
+                    timestamp = record.get("timestamp", "")
+                    uuid = record.get("uuid", message.get("id", ""))
 
-                # Validate role
-                if role not in ("user", "assistant"):
-                    continue
+                    turns.append(Turn(
+                        role=role,
+                        blocks=blocks,
+                        timestamp=timestamp,
+                        uuid=uuid,
+                    ))
 
-                # Extract content blocks
-                content = message.get("content")
-                blocks = _normalize_content(content)
+                # ── Codex format: type == "response_item" with payload ──
+                elif record_type == "response_item":
+                    payload = record.get("payload", {})
+                    role = payload.get("role", "")
 
-                # Build timestamp
-                timestamp = record.get("timestamp", "")
+                    # Map Codex roles to standard roles
+                    if role == "developer":
+                        role = "assistant"
+                    elif role not in ("user", "assistant"):
+                        continue
 
-                # Build UUID
-                uuid = record.get("uuid", message.get("id", ""))
+                    content = payload.get("content")
+                    blocks = _normalize_content(content)
+                    timestamp = record.get("timestamp", "")
+                    uuid = record.get("id", "")
 
-                turns.append(Turn(
-                    role=role,
-                    blocks=blocks,
-                    timestamp=timestamp,
-                    uuid=uuid,
-                ))
+                    turns.append(Turn(
+                        role=role,
+                        blocks=blocks,
+                        timestamp=timestamp,
+                        uuid=uuid,
+                    ))
+
+                # Other record types (session_meta, event_msg, turn_context) are skipped
 
     except OSError:
         pass
@@ -86,6 +102,9 @@ def _normalize_content(content) -> list[ContentBlock]:
     - A plain string (compact summary format)
     - An array of typed content blocks
     - None / missing
+
+    Supports both Claude Code types (text, thinking, tool_use)
+    and Codex types (input_text, output_text).
     """
     if content is None:
         return []
@@ -103,16 +122,31 @@ def _normalize_content(content) -> list[ContentBlock]:
 
             block_type = block.get("type", "")
 
+            # Claude Code: text
             if block_type == "text":
                 text = block.get("text", "")
                 if text:
                     blocks.append(ContentBlock(type=BlockType.TEXT, text=text))
 
+            # Codex: input_text → map to text
+            elif block_type == "input_text":
+                text = block.get("text", "")
+                if text:
+                    blocks.append(ContentBlock(type=BlockType.TEXT, text=text))
+
+            # Codex: output_text → map to text
+            elif block_type == "output_text":
+                text = block.get("text", "")
+                if text:
+                    blocks.append(ContentBlock(type=BlockType.TEXT, text=text))
+
+            # Claude Code: thinking
             elif block_type == "thinking":
                 thinking = block.get("thinking", "")
                 if thinking:
                     blocks.append(ContentBlock(type=BlockType.THINKING, thinking=thinking))
 
+            # Claude Code: tool_use
             elif block_type == "tool_use":
                 name = block.get("name", "")
                 inp = block.get("input", {})

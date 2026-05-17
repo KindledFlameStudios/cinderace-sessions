@@ -267,17 +267,17 @@ function filterSessions() {
 
 function renderSessionList() {
   const list = $('#sessionList');
-  const empty = $('#sessionsEmpty');
   const sessions = filterSessions();
 
   if (sessions.length === 0) {
-    list.innerHTML = '';
-    empty.style.display = 'flex';
-    empty.querySelector('.empty-text').textContent = 'No sessions found';
+    list.innerHTML = `
+      <div class="empty-state" id="sessionsEmpty">
+        <div class="empty-icon">📂</div>
+        <div class="empty-text">No sessions found</div>
+      </div>`;
     return;
   }
 
-  empty.style.display = 'none';
   list.innerHTML = sessions.map(s => `
     <div class="session-item ${currentSession && currentSession.filepath === s.filepath ? 'selected' : ''}"
          data-filepath="${encodeURIComponent(s.filepath)}" onclick="selectSession(decodeURIComponent(this.dataset.filepath))">
