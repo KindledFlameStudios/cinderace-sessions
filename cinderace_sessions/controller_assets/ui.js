@@ -241,7 +241,9 @@ function filterSessions() {
     else if (currentRange === 'month') cutoff.setMonth(now.getMonth() - 1);
 
     filtered = filtered.filter(s => {
+      if (!s.date) return true;  // Keep sessions without dates
       const d = new Date(s.date);
+      if (isNaN(d.getTime())) return true;  // Keep if date is unparseable
       return d >= cutoff;
     });
   }
@@ -278,7 +280,7 @@ function renderSessionList() {
   empty.style.display = 'none';
   list.innerHTML = sessions.map(s => `
     <div class="session-item ${currentSession && currentSession.filepath === s.filepath ? 'selected' : ''}"
-         data-filepath="${s.filepath}" onclick="selectSession('${s.filepath.replace(/'/g, "\\'")}')">
+         data-filepath="${encodeURIComponent(s.filepath)}" onclick="selectSession(decodeURIComponent(this.dataset.filepath))">
       <div class="session-title">${escapeHtml(s.title || s.project || 'Untitled')}</div>
       <div class="session-meta">
         <span class="cli-badge ${cliBadgeClass(s.cli_source)}">${cliDisplayName(s.cli_source)}</span>
@@ -394,7 +396,7 @@ function selectProject(projectName) {
   if (!container) return;
 
   container.innerHTML = sessions.map(s => `
-    <div class="session-item" onclick="selectSession('${s.filepath.replace(/'/g, "\\'")}')">
+    <div class="session-item" data-filepath="${encodeURIComponent(s.filepath)}" onclick="selectSession(decodeURIComponent(this.dataset.filepath))">
       <div class="session-title">${escapeHtml(s.title || 'Untitled')}</div>
       <div class="session-meta">
         <span class="cli-badge ${cliBadgeClass(s.cli_source)}">${cliDisplayName(s.cli_source)}</span>

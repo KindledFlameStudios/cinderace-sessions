@@ -226,16 +226,15 @@ class SessionsAPI:
 
     def get_ember_status(self) -> str | None:
         """Check if ember-memory is available."""
+        # Try library import (ember_memory v2 API)
         try:
-            from ember_memory.core.backends import get_backend_v2
-            from ember_memory.core.embeddings import get_embedding_provider
-            backend = get_backend_v2()
-            embedder = get_embedding_provider()
-            if backend and embedder:
-                return "library"
+            from ember_memory.ingest import ingest_directory
+            from ember_memory.core.search import retrieve
+            return "library"
         except ImportError:
             pass
 
+        # Try HTTP API (MCP server running)
         try:
             import requests
             resp = requests.get("http://localhost:2214/health", timeout=2)
@@ -247,7 +246,7 @@ class SessionsAPI:
         return None
 
     def ingest_session(self, filepath: str, collection: str = "general", tags: str = "") -> bool:
-        """Ingest a session into ember-memory."""
+        """Ingest a session into ember-memory via HTTP MCP server."""
         source = "unknown"
         for s in self._sessions_cache:
             if s.get("filepath") == filepath:
@@ -270,57 +269,26 @@ class SessionsAPI:
         stats = build_stats(turns)
         content = build_document(turns, stats, meta, options)
 
+        # Use HTTP MCP server for ingest
         try:
-            # Try library import first
-            from ember_memory.core.backends import get_backend_v2
-            from ember_memory.core.embeddings import get_embedding_provider
+            import requests
 
-            backend = get_backend_v2()
-            embedder = get_embedding_provider()
-
-            # Create collection if it doesn't exist
-            try:
-                backend.create_collection(collection, dimension=embedder.dimension())
-            except Exception:
-                pass
-
-            # Store memory
-            from datetime import datetime
-            doc_id = f"cas_{Path(filepath).stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            embedding = embedder.embed(content)
             tags_str = tags or f"cli:{source},project:{meta.slug or 'unknown'},date:{meta.first_date}"
-            backend.insert(
-                collection=collection,
-                doc_id=doc_id,
-                content=content,
-                embedding=embedding,
-                metadata={
-                    "source": f"cinderace-sessions:{source}",
+            source_str = f"cinderace-sessions:{source}"
+
+            resp = requests.post(
+                "http://localhost:2214/tools/memory_store",
+                json={
+                    "content": content[:8000],
+                    "collection": collection,
                     "tags": tags_str,
-                    "ingested_at": datetime.now().isoformat(),
+                    "source": source_str,
                 },
+                timeout=30,
             )
-            return True
-
-        except ImportError:
-            # Fall back to HTTP API
-            try:
-                import requests
-                import json
-
-                resp = requests.post(
-                    "http://localhost:2214/tools/memory_store",
-                    json={
-                        "content": content[:8000],  # Limit for API
-                        "collection": collection,
-                        "tags": tags or f"cli:{source},project:{meta.slug}",
-                        "source": f"cinderace-sessions:{source}",
-                    },
-                    timeout=30,
-                )
-                return resp.status_code == 200
-            except Exception:
-                return False
+            return resp.status_code == 200
+        except Exception:
+            return False
 
     # ── Custom CLIs ─────────────────────────────────────────────────
 
@@ -363,9 +331,11 @@ class SessionsAPI:
     # ── Internal Helpers ─────────────────────────────────────────────
 
     def _parse_session(self, filepath: str, source: str):
-        """Parse a session file based on its source CLI."""
+        """Parse a session file based on its source CLI and file extension."""
         try:
-            if source == "gemini-cli":
+            filepath_lower = filepath.lower()
+
+            if source == "gemini-cli" or filepath_lower.endswith("/logs.json"):
                 turns = parse_gemini_session(filepath)
                 meta = gemini_extract_meta(filepath)
             else:
@@ -377,7 +347,9 @@ class SessionsAPI:
                 return None, None
             return turns, meta
 
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return None, None
 
     @staticmethod
@@ -399,6 +371,13 @@ class SessionsAPI:
 
 def run_gui():
     """Create and run the pywebview window."""
+    from cinderace_sessions.single_instance import acquire_instance_lock
+
+    lock = acquire_instance_lock("controller")
+    if not lock:
+        print("CinderACE Sessions is already running.")
+        return
+
     api = SessionsAPI()
     html = _get_html()
 
@@ -414,7 +393,7 @@ def run_gui():
     )
 
     api._window = window
-    webview.start(debug=True)
+    webview.start(debug=False)
 
 
 def main():
