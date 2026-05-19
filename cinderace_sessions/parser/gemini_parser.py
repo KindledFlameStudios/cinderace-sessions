@@ -1,17 +1,22 @@
 """CinderACE Sessions v2 — Gemini CLI JSON session parser.
 
-Gemini CLI stores sessions differently from Claude Code/Codex:
-- logs.json: complete runtime session log (JSON array of messages)
-- checkpoint-*.json: manually saved snapshots (JSON array of messages)
+Gemini CLI stores sessions in two formats:
 
-Messages use {role: 'user'|'model', parts: [...]} format.
-Also processes tool calls and thinking blocks from the logs format.
+1. logs.json — flat runtime session log (JSON array of messages):
+   [{type: 'user'|'model', message: 'string', timestamp, sessionId}, ...]
+
+2. Chat files (in chats/ directory) — structured session objects:
+   {sessionId, messages: [{type: 'user'|'gemini'|'info', content: list|string,
+    thoughts: [...], toolCalls: [...], tokens, model}], ...}
+
+Also processes checkpoints (same format as chat files).
+
+Both formats are handled transparently based on the structure detected.
 """
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,40 +31,207 @@ from cinderace_sessions.parser.base import (
 
 
 def parse_gemini_session(filepath: str) -> list[Turn]:
-    """Parse a Gemini CLI session file (JSON array format) into Turn objects.
+    """Parse a Gemini CLI session file into Turn objects.
 
-    Handles both logs.json (runtime log) and checkpoint-*.json (saved snapshots).
+    Handles both formats:
+    - logs.json: flat array of {type, message, timestamp}
+    - Chat files: {messages: [{type, content, thoughts, toolCalls}]}
+    - Checkpoint files: same as chat files
     """
     turns: list[Turn] = []
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError):
+            raw = f.read()
+    except OSError:
         return turns
 
-    # Data should be a list of session entries
-    if not isinstance(data, list):
+    # Try JSON first (chat format and logs format)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # Try JSONL — Gemini stores some sessions as line-delimited JSON
+        # First line may be session metadata ({sessionId, projectHash, ...})
+        # Subsequent lines are individual chat messages ({type, content, ...})
+        messages = []
+        for line in raw.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            if isinstance(entry, dict):
+                # Skip metadata entries like {sessionId, projectHash, kind}
+                if "kind" in entry and "sessionId" in entry:
+                    continue
+                # Skip $set entries (live update patches)
+                if "$set" in entry and len(entry) == 1:
+                    continue
+                # Collect message entries
+                if "type" in entry:
+                    messages.append(entry)
+
+        if messages:
+            # Parse as chat messages (Gemini format with type/content)
+            return _parse_chat_messages(messages)
+        return turns  # No valid JSON found
+
+    if not isinstance(data, (list, dict)):
         return turns
 
-    for entry in data:
+    # Determine format and extract message list
+    if isinstance(data, dict):
+        # Chat / checkpoint format: {sessionId, messages: [...]}
+        messages = data.get("messages", [])
+        if not isinstance(messages, list):
+            return turns
+        return _parse_chat_messages(messages)
+    elif isinstance(data, list):
+        # Could be logs.json (flat array) or a chat array
+        if data and isinstance(data[0], dict):
+            # Check if it's a chat-style format or flat logs
+            first = data[0]
+            if "messages" in first and isinstance(first.get("messages"), list):
+                # Array of chat objects — take the first one
+                messages = first.get("messages", [])
+                return _parse_chat_messages(messages)
+            elif "type" in first and "message" in first:
+                # logs.json format: flat array of {type, message}
+                return _parse_logs_entries(data)
+            elif "type" in first and "content" in first:
+                # Already a message array (chat-style but without wrapper)
+                return _parse_chat_messages(data)
+
+    return turns
+
+
+def _parse_logs_entries(entries: list[dict]) -> list[Turn]:
+    """Parse logs.json format: flat array of {type, message, timestamp}.
+
+    In logs.json, entries use:
+    - type: 'user' or 'model'
+    - message: string content
+    - timestamp: ISO timestamp
+    - sessionId: session identifier
+    """
+    turns: list[Turn] = []
+
+    for entry in entries:
         if not isinstance(entry, dict):
             continue
 
-        role = entry.get("role", "")
+        entry_type = entry.get("type", "")
 
-        # Map Gemini's 'model' role to 'assistant'
-        if role == "model":
+        # Map types to roles
+        if entry_type == "user":
+            role = "user"
+        elif entry_type == "model":
             role = "assistant"
-        elif role != "user":
+        else:
             continue
 
-        blocks = _parse_gemini_blocks(entry)
+        # Content is in the 'message' field as a string
+        content = entry.get("message", "")
+        if isinstance(content, str):
+            content = content.strip()
+
+        if not content:
+            continue
+
+        timestamp = entry.get("timestamp", "")
+        turn_uuid = entry.get("sessionId", str(uuid4()))
+
+        turns.append(Turn(
+            role=role,
+            blocks=[ContentBlock(type=BlockType.TEXT, text=content)],
+            timestamp=timestamp,
+            uuid=turn_uuid,
+        ))
+
+    return turns
+
+
+def _parse_chat_messages(messages: list[dict]) -> list[Turn]:
+    """Parse chat-format messages: [{type, content, thoughts, toolCalls}].
+
+    In chat files, messages use:
+    - type: 'user', 'gemini', or 'info'
+    - content: string or list of {text: '...'} objects
+    - thoughts: [{subject, description, timestamp}] (thinking blocks)
+    - toolCalls: [{name, args, result, status}] (tool use)
+    - tokens: {input, output} (token usage)
+    - model: model name
+    """
+    turns: list[Turn] = []
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+
+        msg_type = msg.get("type", "")
+
+        # Map types to roles
+        if msg_type == "user":
+            role = "user"
+        elif msg_type == "gemini":
+            role = "assistant"
+        elif msg_type == "info":
+            # Info messages (e.g., model switches) — skip, not conversation
+            continue
+        else:
+            continue
+
+        blocks: list[ContentBlock] = []
+
+        # ── Parse thoughts (thinking blocks) ──
+        thoughts = msg.get("thoughts", [])
+        if isinstance(thoughts, list):
+            for thought in thoughts:
+                if not isinstance(thought, dict):
+                    continue
+                subject = thought.get("subject", "")
+                description = thought.get("description", "")
+                if subject or description:
+                    text = f"[{subject}] {description}" if subject else description
+                    blocks.append(ContentBlock(type=BlockType.THINKING, thinking=text))
+
+        # ── Parse content ──
+        content = msg.get("content", "")
+        content_blocks = _parse_content_field(content)
+
+        # For gemini/assistant messages, put thinking before content
+        if role == "assistant":
+            blocks.extend(content_blocks)
+        else:
+            # For user messages, content first
+            blocks = content_blocks + blocks
+
+        # ── Parse tool calls ──
+        tool_calls = msg.get("toolCalls", [])
+        if isinstance(tool_calls, list):
+            for tc in tool_calls:
+                if not isinstance(tc, dict):
+                    continue
+                name = tc.get("name", "")
+                if not name:
+                    continue
+                args = tc.get("args", {})
+                if not isinstance(args, dict):
+                    args = {"args": str(args)}
+                blocks.append(ContentBlock(
+                    type=BlockType.TOOL_USE,
+                    name=name,
+                    input=args,
+                ))
+
         if not blocks:
             continue
 
-        timestamp = entry.get("timestamp", entry.get("createdAt", ""))
-        turn_uuid = entry.get("id", str(uuid4()))
+        timestamp = msg.get("timestamp", "")
+        turn_uuid = msg.get("id", str(uuid4()))
 
         turns.append(Turn(
             role=role,
@@ -71,76 +243,63 @@ def parse_gemini_session(filepath: str) -> list[Turn]:
     return turns
 
 
-def _parse_gemini_blocks(entry: dict) -> list[ContentBlock]:
-    """Extract content blocks from a Gemini CLI message entry.
-
-    Gemini uses a 'parts' array. Each part can be:
-    - text: {text: "..."}
-    - function_call / tool_use: {functionCall: {name: "...", args: {...}}}
-    - function_response: {functionResponse: {name: "...", response: {...}}}
-    - thought: {thought: True, text: "..."} (Gemini's thinking format)
+def _parse_content_field(content) -> list[ContentBlock]:
+    """Parse a content field which can be:
+    - A plain string
+    - A list of {text: '...'} objects
+    - A list of mixed objects (text, functionCall, functionResponse)
+    - None/empty
     """
-    blocks: list[ContentBlock] = []
-    parts = entry.get("parts", [])
+    if content is None or content == "":
+        return []
 
-    if not parts:
-        # Some entries use 'content' as a string directly
-        content = entry.get("content", "")
-        if isinstance(content, str) and content.strip():
-            blocks.append(ContentBlock(type=BlockType.TEXT, text=content))
-        return blocks
-
-    if not isinstance(parts, list):
-        return blocks
-
-    for part in parts:
-        if not isinstance(part, dict):
-            continue
-
-        # Thinking block
-        if part.get("thought"):
-            text = part.get("text", "")
-            if text:
-                blocks.append(ContentBlock(type=BlockType.THINKING, thinking=text))
-            continue
-
-        # Text block
-        text = part.get("text", "")
+    if isinstance(content, str):
+        text = content.strip()
         if text:
-            blocks.append(ContentBlock(type=BlockType.TEXT, text=text))
-            continue
+            return [ContentBlock(type=BlockType.TEXT, text=text)]
+        return []
 
-        # Tool/function call
-        func_call = part.get("functionCall")
-        if func_call and isinstance(func_call, dict):
-            name = func_call.get("name", "")
-            args = func_call.get("args", {})
-            if name:
-                if isinstance(args, dict):
-                    args_display = args
-                elif isinstance(args, str):
-                    args_display = {"args": args}
-                else:
-                    args_display = {}
-                blocks.append(ContentBlock(
-                    type=BlockType.TOOL_USE,
-                    name=name,
-                    input=args_display,
-                ))
-            continue
+    if isinstance(content, list):
+        blocks: list[ContentBlock] = []
+        for part in content:
+            if not isinstance(part, dict):
+                continue
 
-        # Function response (tool result) — skip in export, but we track it
-        func_resp = part.get("functionResponse")
-        if func_resp:
-            # We don't include tool results in the turn blocks
-            continue
+            # Text block
+            text = part.get("text", "")
+            if text and not part.get("thought"):
+                blocks.append(ContentBlock(type=BlockType.TEXT, text=text))
+                continue
 
-    return blocks
+            # Thinking block (in content, not the separate thoughts field)
+            if part.get("thought") and text:
+                blocks.append(ContentBlock(type=BlockType.THINKING, thinking=text))
+                continue
+
+            # Function call (tool use)
+            func_call = part.get("functionCall")
+            if func_call and isinstance(func_call, dict):
+                name = func_call.get("name", "")
+                args = func_call.get("args", {})
+                if name:
+                    blocks.append(ContentBlock(
+                        type=BlockType.TOOL_USE,
+                        name=name,
+                        input=args if isinstance(args, dict) else {},
+                    ))
+                continue
+
+            # Function response — skip
+            if part.get("functionResponse"):
+                continue
+
+        return blocks
+
+    return []
 
 
 def gemini_build_stats(turns: list[Turn]) -> SessionStats:
     """Compute stats for Gemini sessions. Same logic as JSONL build_stats."""
-    # Reuse the shared stats logic
     from cinderace_sessions.parser.jsonl_parser import build_stats
     return build_stats(turns)
 
@@ -148,19 +307,39 @@ def gemini_build_stats(turns: list[Turn]) -> SessionStats:
 def gemini_extract_meta(filepath: str) -> SessionMeta:
     """Extract metadata from a Gemini CLI session file.
 
-    Gemini doesn't store session IDs or entrypoints in the same way.
-    We derive what we can and leave the rest as defaults.
+    Handles both logs.json and chat file formats.
     """
     meta = SessionMeta()
     filename = Path(filepath).stem
 
-    # For logs.json, the session ID comes from the parent directory hash
-    # For checkpoints, the name is in the filename
+    # For logs.json, derive ID from parent directory hash
+    # For chat files, use the session ID from the data
+    # For checkpoints, extract from filename
     if filename.startswith("checkpoint-"):
         meta.session_id = filename.replace("checkpoint-", "")
         meta.slug = meta.session_id
+    elif filename == "logs":
+        # logs.json — use parent directory as slug
+        parent = Path(filepath).parent.name
+        meta.session_id = f"{parent}-{filename}"
+        meta.slug = parent
+    elif filename.startswith("session-"):
+        # Chat file — use filename as ID
+        meta.session_id = filename
+        # Try to extract a readable slug from the date portion
+        # session-2026-04-20T21-37-1312ff22 → 2026-04-20
+        parts = filename.split("T")
+        if len(parts) >= 1 and "-" in parts[0]:
+            date_part = parts[0].replace("session-", "")
+            if len(date_part) >= 10:
+                meta.slug = date_part[:10]
+            else:
+                meta.slug = date_part
+        else:
+            meta.slug = filename
+        # Parent directory provides project context (stored in SessionInfo, not SessionMeta)
+        _ = Path(filepath).parent.name
     else:
-        # Use the parent directory hash as part of the ID
         parent = Path(filepath).parent.name
         meta.session_id = f"{parent}-{filename}"
         meta.slug = parent
@@ -168,29 +347,56 @@ def gemini_extract_meta(filepath: str) -> SessionMeta:
     meta.entrypoint = SessionEntrypoint.UNKNOWN
     meta.first_date = ""
 
+    # Try to extract date from the filename for session files
+    if filename.startswith("session-"):
+        date_str = filename.replace("session-", "").split("T")[0]
+        if len(date_str) >= 10:
+            meta.first_date = date_str[:10]
+
+    # Try to get date and session ID from file data
+    # For small files, parse the JSON. For large files, use filename-derived metadata.
     try:
         stat = Path(filepath).stat()
-        # Use file modification time as a fallback date
-        from datetime import datetime
-        mtime = datetime.fromtimestamp(stat.st_mtime)
-        meta.first_date = mtime.strftime("%Y-%m-%d")
+        file_size = stat.st_size
 
-        # Try to get the actual first date from the session data
-        read_size = min(stat.st_size, 65536)  # First 64KB
-        with open(filepath, "r", encoding="utf-8") as f:
-            chunk = f.read(read_size)
+        if file_size <= 2 * 1024 * 1024:  # 2MB — safe to fully parse
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-        try:
-            data = json.loads(chunk)
-            if isinstance(data, list) and data:
-                first = data[0]
-                ts = first.get("timestamp", first.get("createdAt", ""))
+            if isinstance(data, dict):
+                # Chat format — extract from top-level fields
+                if "sessionId" in data:
+                    meta.session_id = data["sessionId"]
+                if "startTime" in data:
+                    ts = data["startTime"]
+                    if isinstance(ts, str) and len(ts) >= 10:
+                        meta.first_date = ts[:10]
+
+            elif isinstance(data, list) and data:
+                # Logs format — extract from first entry
+                first = data[0] if isinstance(data[0], dict) else {}
+                ts = first.get("timestamp", "")
                 if isinstance(ts, str) and len(ts) >= 10:
                     meta.first_date = ts[:10]
-        except json.JSONDecodeError:
-            pass
+                if "sessionId" in first:
+                    meta.session_id = first["sessionId"]
 
-    except OSError:
-        pass
+        # For larger files, filename-derived metadata is already set above
+
+        # Fallback: use file modification time if no date yet
+        if not meta.first_date:
+            from datetime import datetime
+            mtime = datetime.fromtimestamp(stat.st_mtime)
+            meta.first_date = mtime.strftime("%Y-%m-%d")
+
+    except (json.JSONDecodeError, OSError, MemoryError):
+        if not meta.first_date:
+            try:
+                from datetime import datetime
+                mtime = datetime.fromtimestamp(Path(filepath).stat().st_mtime)
+                meta.first_date = mtime.strftime("%Y-%m-%d")
+            except OSError:
+                from datetime import date
+                meta.first_date = date.today().isoformat()
 
     return meta

@@ -77,6 +77,11 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('active');
       const panel = $(`#tab-${btn.dataset.tab}`);
       if (panel) panel.classList.add('active');
+
+      // Load data when switching to summarizer tab
+      if (btn.dataset.tab === 'summarizer') {
+        initSummarizerTab();
+      }
     });
   });
 
@@ -110,13 +115,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Export button
   $('#btnExport')?.addEventListener('click', exportSession);
 
-  // Summarize button
+  // Summarize button — switch to summarizer tab and pre-select session
   $('#btnSummarize')?.addEventListener('click', () => {
     // Switch to summarizer tab
     $$('.tab-btn').forEach(b => b.classList.remove('active'));
     $$('.tab-panel').forEach(p => p.classList.remove('active'));
     $$('[data-tab="summarizer"]').forEach(b => b.classList.add('active'));
     $('#tab-summarizer')?.classList.add('active');
+    populateSummarizeDropdown();
   });
 
   // Ingest button
@@ -138,12 +144,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // Summarizer provider toggle
   $('#summarizerProvider')?.addEventListener('change', (e) => {
     $('#customUrlRow').style.display = e.target.value === 'custom' ? 'flex' : 'none';
+    // Hide API key row for Ollama
+    const apiKeyRow = $('#summarizerApiKey')?.closest('.form-row');
+    if (apiKeyRow) apiKeyRow.style.display = e.target.value === 'ollama' ? 'none' : 'flex';
   });
 
-  // Save template
+  // Template management
+  $('#templateSelect')?.addEventListener('change', loadTemplateContent);
   $('#btnSaveTemplate')?.addEventListener('click', saveTemplate);
   $('#btnResetTemplate')?.addEventListener('click', resetTemplate);
+  $('#btnNewTemplate')?.addEventListener('click', newTemplate);
+  $('#btnDeleteTemplate')?.addEventListener('click', deleteTemplate);
+
+  // Summarize controls
   $('#btnTestProvider')?.addEventListener('click', testProvider);
+  $('#btnRunSummarize')?.addEventListener('click', summarizeCurrentSession);
+  $('#btnCopySummary')?.addEventListener('click', copySummary);
+  $('#btnExportSummary')?.addEventListener('click', exportSummary);
+  $('#btnIngestSummary')?.addEventListener('click', ingestSummary);
 });
 
 // ── Initialization ────────────────────────────────────────────────
@@ -512,18 +530,74 @@ async function checkEmberStatus() {
   label.textContent = status;  // 'library' or 'server'
 }
 
+// ── Summarizer Tab Init ──────────────────────────────────────────────
+
+async function initSummarizerTab() {
+  populateSummarizeDropdown();
+  await loadTemplates();
+  await loadSummaryHistory();
+}
+
 // ── Summarizer ──────────────────────────────────────────────────────
+
+let currentSummary = null;  // Store last summary result for copy/export
+
+function populateSummarizeDropdown() {
+  const sel = $('#summarizeSessionSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Select a session —</option>';
+  for (const s of allSessions) {
+    const label = `${s.title || s.project || 'Untitled'} (${formatDate(s.date)})`;
+    const opt = document.createElement('option');
+    opt.value = s.filepath;
+    opt.textContent = label;
+    sel.appendChild(opt);
+  }
+  // Pre-select if a session is currently selected in the Sessions tab
+  if (currentSession && currentSession.filepath) {
+    sel.value = currentSession.filepath;
+  }
+}
 
 async function testProvider() {
   const status = $('#providerStatus');
+  if (!status) return;
+
+  // Save settings first so the backend has current provider/key
+  await saveSettings();
+
   status.textContent = 'Testing...';
+  status.style.color = 'var(--fg-muted)';
   const result = await callApi('test_summarizer_connection');
-  if (result) {
-    status.textContent = '✓ Connected';
+  if (result && result.success) {
+    status.textContent = `✓ Connected (${result.model || 'OK'})`;
     status.style.color = 'var(--success)';
   } else {
-    status.textContent = '✗ Failed';
+    status.textContent = `✗ ${result?.error || 'Failed'}`;
     status.style.color = 'var(--error)';
+  }
+}
+
+async function loadTemplates() {
+  const names = await callApi('list_templates');
+  const sel = $('#templateSelect');
+  if (!sel || !names) return;
+  sel.innerHTML = '';
+  for (const name of names) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name === 'default' ? 'Default Summary Template' : name;
+    sel.appendChild(opt);
+  }
+  // Load the currently selected template content
+  await loadTemplateContent();
+}
+
+async function loadTemplateContent() {
+  const name = $('#templateSelect')?.value || 'default';
+  const content = await callApi('load_template', name);
+  if (content && $('#templateEditor')) {
+    $('#templateEditor').value = content;
   }
 }
 
@@ -537,7 +611,200 @@ async function saveTemplate() {
 
 async function resetTemplate() {
   const content = await callApi('get_default_template');
-  if (content) $('#templateEditor').value = content;
+  if (content && $('#templateEditor')) $('#templateEditor').value = content;
+}
+
+async function deleteTemplate() {
+  const name = $('#templateSelect')?.value;
+  if (!name || name === 'default') {
+    toast('Cannot delete the default template', 'error');
+    return;
+  }
+  const ok = await callApi('delete_template', name);
+  if (ok) {
+    toast('Template deleted', 'success');
+    await loadTemplates();
+  } else {
+    toast('Failed to delete template', 'error');
+  }
+}
+
+async function newTemplate() {
+  const name = prompt('Template name:');
+  if (!name) return;
+  const sel = $('#templateSelect');
+  const opt = document.createElement('option');
+  opt.value = name;
+  opt.textContent = name;
+  sel.appendChild(opt);
+  sel.value = name;
+  $('#templateEditor').value = '';
+  $('#templateEditor').focus();
+}
+
+async function summarizeCurrentSession() {
+  const filepath = $('#summarizeSessionSelect')?.value;
+  if (!filepath) {
+    toast('Select a session first', 'error');
+    return;
+  }
+
+  const templateName = $('#templateSelect')?.value || 'default';
+
+  // Show progress
+  const progressDiv = $('#summarizeProgress');
+  const progressFill = $('#summarizeProgressFill');
+  const progressText = $('#summarizeProgressText');
+  if (progressDiv) progressDiv.style.display = 'block';
+  if (progressFill) progressFill.classList.add('indeterminate');
+  if (progressText) progressText.textContent = 'Generating summary...';
+
+  // Disable button during request
+  const btn = $('#btnRunSummarize');
+  if (btn) btn.disabled = true;
+
+  try {
+    const result = await callApi('summarize_session', filepath, templateName);
+
+    if (progressFill) progressFill.classList.remove('indeterminate');
+
+    if (result && result.success) {
+      if (progressFill) progressFill.style.width = '100%';
+      if (progressText) progressText.textContent = 'Done!';
+
+      currentSummary = result;
+
+      // Display the result
+      const resultSection = $('#summaryResultSection');
+      const resultDiv = $('#summaryResult');
+      const metaDiv = $('#summaryMeta');
+      if (resultSection) resultSection.style.display = 'block';
+      if (metaDiv) {
+        metaDiv.innerHTML = `
+          <span>🤖 ${escapeHtml(result.model || 'Unknown')}</span>
+          <span>🔢 ${result.tokens_used || 0} tokens</span>
+          <span>📄 ${escapeHtml(Path_name(filepath))}</span>
+        `;
+      }
+      if (resultDiv) resultDiv.textContent = result.content || 'No content returned';
+
+      // Refresh history
+      await loadSummaryHistory();
+
+      toast('Summary generated', 'success');
+    } else {
+      if (progressDiv) progressDiv.style.display = 'none';
+      toast(result?.error || 'Summarization failed', 'error');
+    }
+  } catch (err) {
+    if (progressDiv) progressDiv.style.display = 'none';
+    toast('Summarization error: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    setTimeout(() => {
+      if (progressDiv) progressDiv.style.display = 'none';
+    }, 2000);
+  }
+}
+
+function Path_name(filepath) {
+  // Simple basename extraction
+  return filepath.split('/').pop().replace(/\.[^.]+$/, '');
+}
+
+function copySummary() {
+  if (!currentSummary || !currentSummary.content) {
+    toast('No summary to copy', 'error');
+    return;
+  }
+  navigator.clipboard.writeText(currentSummary.content).then(() => {
+    toast('Summary copied to clipboard', 'success');
+  }).catch(() => {
+    // Fallback for pywebview
+    toast('Copy not supported in this environment', 'error');
+  });
+}
+
+async function exportSummary() {
+  if (!currentSummary || !currentSummary.content) {
+    toast('No summary to export', 'error');
+    return;
+  }
+  const result = await callApi('export_summary_markdown', currentSummary.content, currentSummary.model || '');
+  if (result) {
+    toast(`Exported to ${result}`, 'success');
+  } else {
+    toast('Export failed', 'error');
+  }
+}
+
+async function ingestSummary() {
+  if (!currentSummary || !currentSummary.content) {
+    toast('No summary to ingest', 'error');
+    return;
+  }
+  const filepath = $('#summarizeSessionSelect')?.value || '';
+  const collection = $('#emberCollection')?.value || 'general';
+  const result = await callApi('ingest_summary', currentSummary.content, collection, filepath);
+  if (result) {
+    toast('Summary ingested into ember-memory', 'success');
+  } else {
+    toast('Ingest failed — is ember-memory running?', 'error');
+  }
+}
+
+async function loadSummaryHistory() {
+  const history = await callApi('get_summary_history');
+  const container = $('#summaryHistory');
+  if (!container) return;
+
+  if (!history || history.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📝</div>
+        <div class="empty-text">No summaries yet</div>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = history.reverse().map((h, i) => `
+    <div class="history-item" onclick="viewHistoryEntry(${i})" data-index="${i}">
+      <div class="history-item-date">${formatDate(h.timestamp)} · ${escapeHtml(h.provider || '')} / ${escapeHtml(h.model || '')}</div>
+      <div class="history-item-preview">${escapeHtml(h.session_slug || '')}</div>
+      <div class="history-item-summary">${escapeHtml(h.summary_preview || '')}</div>
+    </div>
+  `).join('');
+}
+
+function viewHistoryEntry(index) {
+  // Fetch history again and show the entry — stored in local cache
+  // We rely on the backend storing the full summary
+  callApi('get_summary_history').then(history => {
+    if (!history || !history[index]) return;
+    const entry = history[history.length - 1 - index]; // reverse order
+    currentSummary = { content: entry.full_summary, model: entry.model, tokens_used: entry.tokens_used };
+
+    const resultSection = $('#summaryResultSection');
+    const resultDiv = $('#summaryResult');
+    const metaDiv = $('#summaryMeta');
+    if (resultSection) resultSection.style.display = 'block';
+    if (metaDiv) {
+      metaDiv.innerHTML = `
+        <span>🤖 ${escapeHtml(entry.model || 'Unknown')}</span>
+        <span>🔢 ${entry.tokens_used || 0} tokens</span>
+        <span>📄 ${escapeHtml(entry.session_slug || '')}</span>
+        <span>🕐 ${formatDate(entry.timestamp)}</span>
+      `;
+    }
+    if (resultDiv) resultDiv.textContent = entry.full_summary || entry.summary_preview || '';
+
+    // Switch to summarizer tab to show it
+    $$('.tab-btn').forEach(b => b.classList.remove('active'));
+    $$('.tab-panel').forEach(p => p.classList.remove('active'));
+    $$('[data-tab="summarizer"]').forEach(b => b.classList.add('active'));
+    const panel = $('#tab-summarizer');
+    if (panel) panel.classList.add('active');
+  });
 }
 
 // ── Utility ─────────────────────────────────────────────────────────

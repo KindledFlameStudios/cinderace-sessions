@@ -167,6 +167,32 @@
       </div>
 
       <div class="section">
+        <div class="section-title">Summarize a Session</div>
+        <div class="form-row">
+          <label class="form-label">Select session</label>
+          <select class="form-select" id="summarizeSessionSelect" style="flex:1">
+            <option value="">— Select a session —</option>
+          </select>
+          <button class="action-btn primary" id="btnRunSummarize">Summarize</button>
+        </div>
+        <div id="summarizeProgress" style="display:none" class="progress-bar">
+          <div class="progress-fill" id="summarizeProgressFill"></div>
+          <span class="progress-text" id="summarizeProgressText">Generating summary...</span>
+        </div>
+      </div>
+
+      <div class="section" id="summaryResultSection" style="display:none">
+        <div class="section-title">Summary Result</div>
+        <div class="summary-meta" id="summaryMeta"></div>
+        <div class="summary-result" id="summaryResult"></div>
+        <div class="form-row" style="margin-top:10px">
+          <button class="action-btn" id="btnCopySummary">Copy</button>
+          <button class="action-btn" id="btnExportSummary">Export as Markdown</button>
+          <button class="action-btn" id="btnIngestSummary">Ingest to ember-memory</button>
+        </div>
+      </div>
+
+      <div class="section">
         <div class="section-title">Summary History</div>
         <div class="history-list" id="summaryHistory">
           <div class="empty-state">

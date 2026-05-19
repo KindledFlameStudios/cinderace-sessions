@@ -289,5 +289,46 @@ html, body {
 .toast.success { border-color: var(--success); color: var(--success); }
 .toast.error { border-color: var(--error); color: var(--error); }
 
+/* Progress bar */
+.progress-bar {
+  position: relative; height: 28px; background: var(--bg-raised);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  overflow: hidden; margin-top: 8px;
+}
+.progress-fill {
+  position: absolute; top: 0; left: 0; height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--ember), var(--ember-mid));
+  transition: width 0.4s ease; border-radius: var(--radius-sm);
+}
+.progress-fill.indeterminate {
+  width: 30% !important;
+  animation: indeterminate 1.5s infinite ease-in-out;
+}
+.progress-text {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 12px; color: var(--fg-dim); z-index: 2;
+}
+
+/* Summary result */
+.summary-result {
+  max-height: 350px; overflow-y: auto; padding: 14px;
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-family: var(--font-mono);
+  font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;
+  color: var(--fg);
+}
+.summary-meta {
+  font-size: 11px; color: var(--fg-muted); margin-bottom: 8px;
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+.summary-meta span { display: flex; align-items: center; gap: 4px; }
+
+/* History items enhanced */
+.history-item-summary {
+  font-size: 11px; color: var(--fg-muted); margin-top: 4px;
+  max-height: 80px; overflow: hidden;
+}
+
 @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes indeterminate { 0% { left: -30%; } 50% { left: 50%; } 100% { left: 100%; } }

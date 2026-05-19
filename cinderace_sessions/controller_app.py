@@ -225,23 +225,23 @@ class SessionsAPI:
     # ── ember-memory Bridge ──────────────────────────────────────────
 
     def get_ember_status(self) -> str | None:
-        """Check if ember-memory is available."""
-        # Try library import (ember_memory v2 API)
+        """Check if ember-memory is available.
+
+        ember-memory runs as a stdio MCP server (not HTTP), so we check:
+        1. Can we import the Python library? (ember-memory installed locally)
+        2. Is the MCP server binary available?
+        """
+        # Try library import (ember_memory installed in same environment)
         try:
-            from ember_memory.ingest import ingest_directory
-            from ember_memory.core.search import retrieve
+            from ember_memory.core.backends.loader import get_backend_v2
             return "library"
         except ImportError:
             pass
 
-        # Try HTTP API (MCP server running)
-        try:
-            import requests
-            resp = requests.get("http://localhost:2214/health", timeout=2)
-            if resp.status_code == 200:
-                return "server"
-        except Exception:
-            pass
+        # Check if the ember-memory MCP server is available as a command
+        import shutil
+        if shutil.which("ember-memory") or shutil.which("ember_memory"):
+            return "mcp"
 
         return None
 
@@ -311,22 +311,246 @@ class SessionsAPI:
                 return result[0]
         return None
 
-    # ── Summarizer (stubs for Phase 5) ─────────────────────────────
-
-    def test_summarizer_connection(self) -> bool:
-        """Test the configured LLM endpoint. Returns True if reachable."""
-        # Will be implemented in Phase 5
-        return False
+    # ── Summarizer ──────────────────────────────────────────────────
 
     def get_default_template(self) -> str:
         """Return the default summary template."""
         from cinderace_sessions.summarizer.template import load_template
         return load_template("default")
 
+    def load_template(self, name: str = "default") -> str:
+        """Load a template by name."""
+        from cinderace_sessions.summarizer.template import load_template
+        return load_template(name)
+
     def save_template(self, name: str, content: str) -> bool:
         """Save a summary template."""
         from cinderace_sessions.summarizer.template import save_template
         return save_template(name, content)
+
+    def list_templates(self) -> list[str]:
+        """List all available template names."""
+        from cinderace_sessions.summarizer.template import list_templates
+        return list_templates()
+
+    def delete_template(self, name: str) -> bool:
+        """Delete a custom template (cannot delete default)."""
+        from cinderace_sessions.summarizer.template import delete_template
+        return delete_template(name)
+
+    def test_summarizer_connection(self) -> dict:
+        """Test the configured LLM endpoint. Returns a result dict."""
+        config = load_config()
+        provider_name = config.get("summarizer_provider", "")
+        api_key = config.get("summarizer_api_key", "")
+        model = config.get("summarizer_model", "")
+        custom_url = config.get("summarizer_custom_url", "")
+
+        # Handle Ollama separately (no API key needed)
+        if provider_name == "ollama":
+            from cinderace_sessions.summarizer.ollama import OllamaProvider
+            prov = OllamaProvider(model=model)
+            success = prov.test_connection()
+            return {
+                "success": success,
+                "provider": "ollama",
+                "model": prov._model,
+                "error": "" if success else "Ollama not running or model not found",
+            }
+
+        if not provider_name or not api_key:
+            return {
+                "success": False,
+                "provider": provider_name,
+                "model": model,
+                "error": "Provider and API key required",
+            }
+
+        try:
+            from cinderace_sessions.summarizer.engine import get_provider
+            prov = get_provider(provider_name, api_key, model, custom_url)
+            success = prov.test_connection()
+            return {
+                "success": success,
+                "provider": provider_name,
+                "model": prov._model,
+                "error": "" if success else "Connection test failed — check API key and endpoint",
+            }
+        except ValueError as e:
+            return {"success": False, "provider": provider_name, "model": model, "error": str(e)}
+        except Exception as e:
+            return {"success": False, "provider": provider_name, "model": model, "error": str(e)}
+
+    def summarize_session(self, filepath: str, template_name: str = "default") -> dict:
+        """Summarize a session using the configured LLM provider.
+
+        Returns a dict with: success, content/error, model, tokens_used.
+        """
+        from cinderace_sessions.summarizer.engine import get_provider, SummarizeResult
+        from cinderace_sessions.summarizer.template import load_template
+        from cinderace_sessions.summarizer.ollama import OllamaProvider
+
+        config = load_config()
+        provider_name = config.get("summarizer_provider", "")
+        api_key = config.get("summarizer_api_key", "")
+        model = config.get("summarizer_model", "")
+        custom_url = config.get("summarizer_custom_url", "")
+
+        # Find and parse the session
+        source = "unknown"
+        for s in self._sessions_cache:
+            if s.get("filepath") == filepath:
+                source = s.get("cli_source", "unknown")
+                break
+
+        turns, meta = self._parse_session(filepath, source)
+        if turns is None:
+            return {"success": False, "error": "Failed to parse session", "content": ""}
+
+        stats = build_stats(turns)
+
+        # Build the content for summarization (truncate if too long)
+        options = RenderOptions(
+            include_thinking=config.get("include_thinking", True),
+            include_tools=config.get("include_tools", False),  # Skip tools in summaries for brevity
+        )
+        from cinderace_sessions.renderer.markdown import build_document
+        content = build_document(turns, stats, meta, options)
+
+        # Truncate to ~120k chars to stay within most LLM context windows
+        MAX_CONTENT = 120000
+        if len(content) > MAX_CONTENT:
+            content = content[:MAX_CONTENT] + "\n\n[... session truncated for length ...]"
+
+        # Load template
+        template = load_template(template_name)
+
+        # Create provider and call
+        try:
+            if provider_name == "ollama":
+                prov = OllamaProvider(model=model)
+            else:
+                if not provider_name or not api_key:
+                    return {
+                        "success": False,
+                        "error": "Configure a provider and API key in the Summarizer tab",
+                        "content": "",
+                    }
+                prov = get_provider(provider_name, api_key, model, custom_url)
+
+            result: SummarizeResult = prov.summarize(content, template)
+
+            # Save to history
+            if result.success:
+                self._save_summary_history(filepath, source, result, provider_name)
+
+            return result.to_dict()
+
+        except ValueError as e:
+            return {"success": False, "error": str(e), "content": ""}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {"success": False, "error": str(e), "content": ""}
+
+    def get_summary_history(self) -> list[dict]:
+        """Return past summaries from the history file."""
+        history_path = Path.home() / ".cinderace-sessions" / "summary_history.json"
+        if not history_path.exists():
+            return []
+        try:
+            with open(history_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return []
+
+    # ── Internal: Summary History ─────────────────────────────────────
+
+    def _save_summary_history(self, filepath: str, source: str,
+                              result, provider_name: str) -> None:
+        """Append a summary to the history file."""
+        history_path = Path.home() / ".cinderace-sessions" / "summary_history.json"
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+
+        history = []
+        if history_path.exists():
+            try:
+                with open(history_path, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                history = []
+
+        history.append({
+            "filepath": filepath,
+            "session_slug": Path(filepath).stem,
+            "cli_source": source,
+            "provider": provider_name,
+            "model": result.model,
+            "tokens_used": result.tokens_used,
+            "summary_preview": result.content[:200] + ("..." if len(result.content) > 200 else ""),
+            "full_summary": result.content,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+        # Keep last 100 summaries
+        history = history[-100:]
+
+        try:
+            with open(history_path, "w", encoding="utf-8") as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
+
+    # ── Summary Export & Ingest ──────────────────────────────────────
+
+    def export_summary_markdown(self, content: str, model: str = "") -> str | None:
+        """Export a summary as a markdown file. Returns the output path."""
+        config = load_config()
+        output_dir = config.get("output_directory", "")
+        if not output_dir:
+            output_dir = os.path.join(os.path.expanduser("~"), "CinderACE-Exports")
+        os.makedirs(output_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        filename = f"summary_{timestamp}.md"
+        out_path = os.path.join(output_dir, filename)
+
+        header = f"# Session Summary\n\n"
+        if model:
+            header += f"*Summarized by {model}*\n\n"
+        header += "---\n\n"
+
+        try:
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(header + content)
+            return out_path
+        except OSError as e:
+            return f"Error: {str(e)}"
+
+    def ingest_summary(self, content: str, collection: str = "general",
+                       filepath: str = "") -> bool:
+        """Ingest a summary into ember-memory via HTTP MCP server."""
+        import requests as req
+
+        try:
+            tags = "summary,cinderace-sessions"
+            if filepath:
+                tags += f",{Path(filepath).stem}"
+            source = "cinderace-sessions:summarizer"
+
+            resp = req.post(
+                "http://localhost:2214/tools/memory_store",
+                json={
+                    "content": content[:8000],
+                    "collection": collection,
+                    "tags": tags,
+                    "source": source,
+                },
+                timeout=30,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
 
     # ── Internal Helpers ─────────────────────────────────────────────
 
@@ -335,7 +559,12 @@ class SessionsAPI:
         try:
             filepath_lower = filepath.lower()
 
-            if source == "gemini-cli" or filepath_lower.endswith("/logs.json"):
+            if source == "gemini-cli":
+                # All Gemini files go through the Gemini parser (handles both JSON and JSONL)
+                turns = parse_gemini_session(filepath)
+                meta = gemini_extract_meta(filepath)
+            elif filepath_lower.endswith("/logs.json") or "/chats/" in filepath_lower:
+                # Gemini session files found by path
                 turns = parse_gemini_session(filepath)
                 meta = gemini_extract_meta(filepath)
             else:
