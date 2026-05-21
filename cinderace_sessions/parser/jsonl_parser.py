@@ -247,6 +247,31 @@ def extract_session_meta(filepath: str) -> SessionMeta:
                 meta.session_id = record["sessionId"]
                 found["session_id"] = True
 
+            # Codex format: session_meta has payload with id and cwd
+            if record.get("type") == "session_meta":
+                payload = record.get("payload", {})
+                if isinstance(payload, dict):
+                    if not found["session_id"] and "id" in payload:
+                        meta.session_id = payload["id"]
+                        found["session_id"] = True
+                    if not found["slug"] and "cwd" in payload:
+                        cwd = payload["cwd"]
+                        meta.slug = cwd.replace("/", "-")
+                        found["slug"] = True
+
+            # Codex format: response_item has timestamp at top level
+            if record.get("type") == "response_item":
+                if not found["first_date"] and "timestamp" in record:
+                    ts = record["timestamp"]
+                    if isinstance(ts, str) and len(ts) >= 10:
+                        meta.first_date = ts[:10]
+                        found["first_date"] = True
+                # Also extract cwd from payload for slug
+                payload = record.get("payload", {})
+                if isinstance(payload, dict) and not found["slug"] and "cwd" in payload:
+                    meta.slug = payload["cwd"].replace("/", "-")
+                    found["slug"] = True
+
             # Slug / cwd
             if not found["slug"]:
                 if "slug" in record:
@@ -292,13 +317,40 @@ def extract_session_meta(filepath: str) -> SessionMeta:
 
 
 def read_preview(filepath: str, max_chars: int = 100) -> str:
-    """Read the first user message from a JSONL session for preview text.
+    """Read the first human-meaningful user message from a JSONL session for preview text.
 
-    Strips HTML-like tags. Returns empty string if no user message found.
+    Handles both Claude Code format (type=user/assistant) and Codex format
+    (type=response_item). Skips system context blocks (AGENTS.md, env XML, etc.)
+    and finds the first piece of actual human-written text.
     """
+    import re
+
+    # Heuristics for identifying system/context content
+    CONTEXT_PREFIXES = (
+        "# AGENTS.md",
+        "# 🏠 Kindled Flame",
+        "Filesystem sandboxing",
+        "Collaboration Mode:",
+        "<permissions",
+    )
+
+    def _is_context(text: str) -> bool:
+        """Return True if this text is system context, not human input."""
+        clean = re.sub(r"<[^>]*>", "", text).strip()
+        if not clean or len(clean) < 5:
+            return True
+        for prefix in CONTEXT_PREFIXES:
+            if clean.startswith(prefix):
+                return True
+        # XML-heavy content (env context like <cwd>, <shell>, etc.)
+        if clean.count("<") > 3 and clean.count(">") > 3:
+            return True
+        return False
+
     try:
         stat = Path(filepath).stat()
-        read_size = min(stat.st_size, 16384)
+        # Read up to 128KB to find human content past system context
+        read_size = min(stat.st_size, 131072)
 
         with open(filepath, "r", encoding="utf-8") as f:
             chunk = f.read(read_size)
@@ -313,30 +365,57 @@ def read_preview(filepath: str, max_chars: int = 100) -> str:
             except json.JSONDecodeError:
                 continue
 
-            if record.get("type") != "user":
-                continue
+            record_type = record.get("type", "")
 
-            message = record.get("message", {})
-            content = message.get("content", "")
+            # ── Claude Code format: type == "user" ──
+            if record_type == "user":
+                message = record.get("message", {})
+                content = message.get("content", "")
 
-            # Handle string content
-            if isinstance(content, str):
-                text = content
-            elif isinstance(content, list):
-                # Find first text block
-                text = ""
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text = block.get("text", "")
-                        break
-            else:
-                continue
+                if isinstance(content, str):
+                    if not _is_context(content):
+                        text = re.sub(r"<[^>]*>", "", content).strip()
+                        if text:
+                            return text[:max_chars]
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "")
+                            if not _is_context(text):
+                                clean = re.sub(r"<[^>]*>", "", text).strip()
+                                if clean:
+                                    return clean[:max_chars]
 
-            # Strip HTML-like tags and whitespace
-            import re
-            text = re.sub(r"<[^>]*>", "", text).strip()
-            if text:
-                return text[:max_chars]
+            # ── Codex format: type == "response_item" ──
+            elif record_type == "response_item":
+                payload = record.get("payload", {})
+                role = payload.get("role", "")
+
+                # Skip developer/system messages
+                if role in ("developer", "system"):
+                    continue
+                # Only use real user messages
+                if role != "user":
+                    continue
+
+                content = payload.get("content", "")
+                if isinstance(content, str):
+                    if not _is_context(content):
+                        text = re.sub(r"<[^>]*>", "", content).strip()
+                        if text:
+                            return text[:max_chars]
+                elif isinstance(content, list):
+                    # Walk all blocks looking for human text
+                    for block in content:
+                        if isinstance(block, dict):
+                            block_type = block.get("type", "")
+                            block_text = block.get("text", "")
+                            if block_type not in ("input_text", "text") or not block_text:
+                                continue
+                            if not _is_context(block_text):
+                                clean = re.sub(r"<[^>]*>", "", block_text).strip()
+                                if clean:
+                                    return clean[:max_chars]
 
     except OSError:
         pass
