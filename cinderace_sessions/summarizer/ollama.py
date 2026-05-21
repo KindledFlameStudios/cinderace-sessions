@@ -101,6 +101,24 @@ class OllamaProvider(LLMProvider):
             return []
 
 
+def list_models(base_url: str = "") -> list[str] | None:
+    """List available Ollama model names (standalone, no instance needed).
+
+    Returns None if Ollama is not running, empty list if running but no models.
+    """
+    url = (base_url.rstrip("/") if base_url else OLLAMA_BASE_URL)
+    try:
+        resp = requests.get(f"{url}/api/tags", timeout=5)
+        if resp.status_code != 200:
+            return None
+        models = resp.json().get("models", [])
+        return [m.get("name", "") for m in models]
+    except requests.exceptions.ConnectionError:
+        return None
+    except Exception:
+        return None
+
+
 def is_ollama_running(base_url: str = "") -> bool:
     """Quick check if Ollama is running at the given URL."""
     url = (base_url.rstrip("/") if base_url else OLLAMA_BASE_URL)

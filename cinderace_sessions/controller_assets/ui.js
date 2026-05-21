@@ -7,6 +7,8 @@ let currentRange = 'all';
 let currentCliFilter = 'all';
 let searchQuery = '';
 let refreshTimer = null;
+let savedModelValue = '';  // Restore after models are fetched
+let groupedByProject = true;  // Default to project-grouped view
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -109,6 +111,17 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSessionList();
   });
 
+  // Group toggle
+  const btnToggleGroup = $('#btnToggleGroup');
+  if (btnToggleGroup) {
+    btnToggleGroup.classList.toggle('active', groupedByProject);
+    btnToggleGroup.addEventListener('click', () => {
+      groupedByProject = !groupedByProject;
+      btnToggleGroup.classList.toggle('active', groupedByProject);
+      renderSessionList();
+    });
+  }
+
   // Refresh button
   $('#btnRefresh')?.addEventListener('click', refreshSessions);
 
@@ -143,10 +156,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Summarizer provider toggle
   $('#summarizerProvider')?.addEventListener('change', (e) => {
-    $('#customUrlRow').style.display = e.target.value === 'custom' ? 'flex' : 'none';
+    const provider = e.target.value;
+    $('#customUrlRow').style.display = provider === 'custom' ? 'flex' : 'none';
     // Hide API key row for Ollama
     const apiKeyRow = $('#summarizerApiKey')?.closest('.form-row');
-    if (apiKeyRow) apiKeyRow.style.display = e.target.value === 'ollama' ? 'none' : 'flex';
+    if (apiKeyRow) apiKeyRow.style.display = provider === 'ollama' ? 'none' : 'flex';
+    // Fetch models for new provider
+    fetchModels(provider);
   });
 
   // Template management
@@ -171,6 +187,9 @@ async function init() {
   await detectCLIs();
   await refreshSessions();
   await checkEmberStatus();
+  // Fetch models for current provider (applies savedModelValue after dropdown is populated)
+  const provider = $('#summarizerProvider')?.value || 'openai';
+  await fetchModels(provider);
   startAutoRefresh();
 }
 
@@ -196,9 +215,22 @@ async function loadSettings() {
     if (el && config[configKey]) el.value = config[configKey];
   });
 
-  if (config.summarizer_provider) $('#summarizerProvider').value = config.summarizer_provider;
-  if (config.summarizer_model) $('#summarizerModel').value = config.summarizer_model;
+  if (config.summarizer_provider) {
+    $('#summarizerProvider').value = config.summarizer_provider;
+    // Trigger visibility toggles for the new provider
+    const provider = config.summarizer_provider;
+    $('#customUrlRow').style.display = provider === 'custom' ? 'flex' : 'none';
+    const apiKeyRow = $('#summarizerApiKey')?.closest('.form-row');
+    if (apiKeyRow) apiKeyRow.style.display = provider === 'ollama' ? 'none' : 'flex';
+    if (provider === 'custom') {
+      $('#summarizerModel').style.display = 'none';
+      const manual = $('#summarizerModelManual');
+      if (manual) manual.style.display = '';
+    }
+  }
   if (config.summarizer_api_key) $('#summarizerApiKey').value = config.summarizer_api_key;
+  // Set model value after fetching models (dropdown may not be populated yet)
+  if (config.summarizer_model) savedModelValue = config.summarizer_model;
   if (config.default_ember_collection) $('#emberCollection').value = config.default_ember_collection;
 }
 
@@ -229,7 +261,6 @@ async function refreshSessions() {
   if (sessions) {
     allSessions = sessions;
     renderSessionList();
-    renderProjects();
   }
   toast('Sessions refreshed', 'success');
 }
@@ -296,6 +327,14 @@ function renderSessionList() {
     return;
   }
 
+  if (groupedByProject) {
+    renderGroupedView(list, sessions);
+  } else {
+    renderFlatView(list, sessions);
+  }
+}
+
+function renderFlatView(list, sessions) {
   list.innerHTML = sessions.map(s => `
     <div class="session-item ${currentSession && currentSession.filepath === s.filepath ? 'selected' : ''}"
          data-filepath="${encodeURIComponent(s.filepath)}" onclick="selectSession(decodeURIComponent(this.dataset.filepath))">
@@ -309,6 +348,68 @@ function renderSessionList() {
       <div class="session-preview">${escapeHtml(s.preview || '')}</div>
     </div>
   `).join('');
+}
+
+function renderGroupedView(list, sessions) {
+  // Group sessions by project
+  const groups = {};
+  for (const s of sessions) {
+    const key = s.project || 'unknown';
+    if (!groups[key]) groups[key] = { name: key, sessions: [], clis: new Set() };
+    groups[key].sessions.push(s);
+    groups[key].clis.add(s.cli_source);
+  }
+
+  // Sort groups by most recent session
+  const sorted = Object.values(groups).sort(
+    (a, b) => b.sessions[0].mtime - a.sessions[0].mtime
+  );
+
+  let html = '';
+  for (const group of sorted) {
+    const isExpanded = expandedGroups.has(group.name);
+    const cliBadges = Array.from(group.clis)
+      .map(c => `<span class="cli-badge ${cliBadgeClass(c)}">${cliDisplayName(c)}</span>`).join(' ');
+
+    html += `
+      <div class="project-group-header ${isExpanded ? 'expanded' : ''}" data-project="${escapeHtml(group.name)}" onclick="toggleProjectGroup(this, '${escapeHtml(group.name).replace(/'/g, "\\'")}')">
+        <span class="project-group-chevron">▶</span>
+        <span class="project-group-name">${escapeHtml(group.name)}</span>
+        <span class="project-group-count">${group.sessions.length} session${group.sessions.length !== 1 ? 's' : ''}</span>
+        ${cliBadges}
+      </div>
+      <div class="project-group-sessions ${isExpanded ? 'expanded' : ''}" data-project-sessions="${escapeHtml(group.name)}">
+        ${group.sessions.map(s => `
+          <div class="session-item ${currentSession && currentSession.filepath === s.filepath ? 'selected' : ''}"
+               data-filepath="${encodeURIComponent(s.filepath)}" onclick="selectSession(decodeURIComponent(this.dataset.filepath))" style="padding-left:24px">
+            <div class="session-title">${escapeHtml(s.title || 'Untitled')}</div>
+            <div class="session-meta">
+              <span class="cli-badge ${cliBadgeClass(s.cli_source)}">${cliDisplayName(s.cli_source)}</span>
+              <span>${formatDate(s.date)}</span>
+              <span>${formatSize(s.file_size)}</span>
+              ${s.message_count ? `<span>${s.message_count} msgs</span>` : ''}
+            </div>
+            <div class="session-preview">${escapeHtml(s.preview || '')}</div>
+          </div>
+        `).join('')}
+      </div>`;
+  }
+  list.innerHTML = html;
+}
+
+let expandedGroups = new Set();
+
+function toggleProjectGroup(headerEl, projectName) {
+  const sessionsDiv = document.querySelector(`[data-project-sessions="${CSS.escape(projectName)}"]`);
+  if (expandedGroups.has(projectName)) {
+    expandedGroups.delete(projectName);
+    headerEl.classList.remove('expanded');
+    if (sessionsDiv) sessionsDiv.classList.remove('expanded');
+  } else {
+    expandedGroups.add(projectName);
+    headerEl.classList.add('expanded');
+    if (sessionsDiv) sessionsDiv.classList.add('expanded');
+  }
 }
 
 // ── Session Selection & Preview ───────────────────────────────────
@@ -382,48 +483,7 @@ async function ingestSession() {
   }
 }
 
-// ── Projects ────────────────────────────────────────────────────────
-
-function renderProjects() {
-  const projects = {};
-  for (const s of allSessions) {
-    const key = s.project || 'unknown';
-    if (!projects[key]) projects[key] = { name: key, sessions: [], clis: new Set() };
-    projects[key].sessions.push(s);
-    projects[key].clis.add(s.cli_source);
-  }
-
-  const list = $('#projectList');
-  if (!list) return;
-
-  const sorted = Object.values(projects).sort((a, b) => b.sessions[0].mtime - a.sessions[0].mtime);
-  list.innerHTML = sorted.map(p => `
-    <div class="project-item" data-project="${p.name}" onclick="selectProject('${p.name.replace(/'/g, "\\'")}')">
-      <div class="project-name">${escapeHtml(p.name)}</div>
-      <div class="project-meta">
-        ${Array.from(p.clis).map(c => `<span class="cli-badge ${cliBadgeClass(c)}">${cliDisplayName(c)}</span>`).join(' ')}
-        <span>${p.sessions.length} sessions</span>
-      </div>
-    </div>
-  `).join('');
-}
-
-function selectProject(projectName) {
-  const sessions = allSessions.filter(s => (s.project || 'unknown') === projectName);
-  const container = $('#projectSessions');
-  if (!container) return;
-
-  container.innerHTML = sessions.map(s => `
-    <div class="session-item" data-filepath="${encodeURIComponent(s.filepath)}" onclick="selectSession(decodeURIComponent(this.dataset.filepath))">
-      <div class="session-title">${escapeHtml(s.title || 'Untitled')}</div>
-      <div class="session-meta">
-        <span class="cli-badge ${cliBadgeClass(s.cli_source)}">${cliDisplayName(s.cli_source)}</span>
-        <span>${formatDate(s.date)}</span>
-        <span>${formatSize(s.file_size)}</span>
-      </div>
-    </div>
-  `).join('');
-}
+// ── Projects (legacy — now handled by grouped view) ────────────────
 
 // ── CLI Status ──────────────────────────────────────────────────────
 
@@ -467,7 +527,7 @@ async function saveSettings() {
     auto_detect_on_launch: $('#autoDetect')?.checked ?? true,
     summarizer_provider: $('#summarizerProvider')?.value || '',
     summarizer_api_key: $('#summarizerApiKey')?.value || '',
-    summarizer_model: $('#summarizerModel')?.value || '',
+    summarizer_model: getModelValue(),
     summarizer_custom_url: $('#summarizerCustomUrl')?.value || '',
     default_ember_collection: $('#emberCollection')?.value || 'general',
   };
@@ -534,6 +594,7 @@ async function checkEmberStatus() {
 
 async function initSummarizerTab() {
   populateSummarizeDropdown();
+  await fetchModels($('#summarizerProvider')?.value || 'openai');
   await loadTemplates();
   await loadSummaryHistory();
 }
@@ -541,6 +602,7 @@ async function initSummarizerTab() {
 // ── Summarizer ──────────────────────────────────────────────────────
 
 let currentSummary = null;  // Store last summary result for copy/export
+let modelCache = {};  // Cache fetched models per provider
 
 function populateSummarizeDropdown() {
   const sel = $('#summarizeSessionSelect');
@@ -556,6 +618,100 @@ function populateSummarizeDropdown() {
   // Pre-select if a session is currently selected in the Sessions tab
   if (currentSession && currentSession.filepath) {
     sel.value = currentSession.filepath;
+  }
+}
+
+// ── Model Fetching ───────────────────────────────────────────────────
+
+async function fetchModels(provider) {
+  const sel = $('#summarizerModel');
+  const manual = $('#summarizerModelManual');
+  const statusEl = $('#modelFetchStatus');
+  if (!sel) return;
+
+  // For custom provider, show manual input instead of dropdown
+  if (provider === 'custom') {
+    sel.style.display = 'none';
+    if (manual) manual.style.display = '';
+    if (statusEl) statusEl.textContent = '';
+    return;
+  }
+  sel.style.display = '';
+  if (manual) manual.style.display = 'none';
+
+  // Check cache first
+  const apiKey = $('#summarizerApiKey')?.value || '';
+  const cacheKey = provider + ':' + (apiKey ? 'key' : 'nokey');
+  if (modelCache[cacheKey]) {
+    populateModelDropdown(sel, modelCache[cacheKey]);
+    if (statusEl) statusEl.textContent = modelCache[cacheKey].live ? '' : modelCache[cacheKey].msg || 'Built-in models';
+    return;
+  }
+
+  // Show loading
+  sel.innerHTML = '<option value="">Loading models...</option>';
+  if (statusEl) statusEl.textContent = 'Fetching models...';
+
+  const result = await callApi('get_provider_models', provider, apiKey);
+
+  if (result && result.ok) {
+    modelCache[cacheKey] = result;
+    populateModelDropdown(sel, result);
+    if (statusEl) {
+      if (result.live) {
+        statusEl.textContent = `${result.models.length} models available`;
+        statusEl.style.color = 'var(--success)';
+      } else {
+        statusEl.textContent = result.msg || 'Built-in models';
+        statusEl.style.color = 'var(--fg-muted)';
+      }
+    }
+  } else {
+    sel.innerHTML = '<option value="">No models found</option>';
+    if (statusEl) {
+      statusEl.textContent = result?.msg || 'Failed to fetch models';
+      statusEl.style.color = 'var(--error)';
+    }
+  }
+}
+
+function populateModelDropdown(sel, result) {
+  // Use savedModelValue if set, otherwise current selection
+  const current = savedModelValue || sel.value || $('#summarizerModelManual')?.value || '';
+  savedModelValue = '';  // Clear after applying
+
+  sel.innerHTML = '';
+  if (!result.models || result.models.length === 0) {
+    sel.innerHTML = '<option value="">No models available</option>';
+    return;
+  }
+
+  // Add a blank option
+  const blankOpt = document.createElement('option');
+  blankOpt.value = '';
+  blankOpt.textContent = '— Select model —';
+  sel.appendChild(blankOpt);
+
+  for (const m of result.models) {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    const suffix = m.free ? ' (free)' : '';
+    opt.textContent = m.name + suffix;
+    opt.title = m.description || '';
+    sel.appendChild(opt);
+  }
+
+  // Restore selection if it exists
+  if (current) {
+    sel.value = current;
+    // If not in the list, add it as a custom option
+    if (sel.value !== current) {
+      const custom = document.createElement('option');
+      custom.value = current;
+      custom.textContent = current + ' (saved)';
+      sel.appendChild(custom);
+      sel.value = current;
+    }
   }
 }
 
@@ -813,3 +969,112 @@ function escapeHtml(text) {
   if (!text) return '';
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+function getModelValue() {
+  const provider = $('#summarizerProvider')?.value || '';
+  if (provider === 'custom') {
+    return $('#summarizerModelManual')?.value || '';
+  }
+  return $('#summarizerModel')?.value || '';
+}
+
+// ── Custom Context Menu ──────────────────────────────────────────────
+// pywebview suppresses native right-click menus on some backends.
+// We enable debug=True + OPEN_DEVTOOLS_IN_DEBUG=False so the DOM
+// contextmenu event fires, then show our own menu for editable fields
+// and text selections.
+
+let contextMenu = null;
+
+function buildContextMenu() {
+  if (contextMenu) return contextMenu;
+
+  contextMenu = document.createElement('div');
+  contextMenu.id = 'casContextMenu';
+  contextMenu.style.cssText =
+    'position:fixed; z-index:10000; background:var(--bg-elevated,#211c14);' +
+    'border:1px solid var(--border-em,rgba(255,120,32,0.18)); border-radius:6px;' +
+    'padding:4px 0; min-width:140px; box-shadow:0 8px 24px rgba(0,0,0,0.6);' +
+    'display:none; font-size:12px; font-family:var(--font-ui,sans-serif);';
+
+  const actions = [
+    { label: 'Copy', cmd: 'copy' },
+    { label: 'Cut', cmd: 'cut', editable: true },
+    { label: 'Paste', cmd: 'paste', editable: true },
+    { label: 'Select All', cmd: 'selectAll' },
+  ];
+
+  actions.forEach(({ label, cmd, editable }) => {
+    const item = document.createElement('div');
+    item.textContent = label;
+    item.dataset.cmd = cmd;
+    item.dataset.editableOnly = editable ? '1' : '0';
+    item.style.cssText =
+      'padding:6px 16px; cursor:pointer; color:var(--fg,#e8ddd0); transition:background 0.1s;';
+    item.addEventListener('mouseenter', () => {
+      item.style.background = 'rgba(255,120,32,0.15)';
+    });
+    item.addEventListener('mouseleave', () => {
+      item.style.background = '';
+    });
+    item.addEventListener('click', () => {
+      document.execCommand(cmd);
+      hideContextMenu();
+    });
+    contextMenu.appendChild(item);
+  });
+
+  document.body.appendChild(contextMenu);
+  return contextMenu;
+}
+
+function showContextMenu(x, y, isEditable) {
+  const menu = buildContextMenu();
+
+  // Show/hide edit-only items based on context
+  menu.querySelectorAll('[data-editable-only="1"]').forEach(item => {
+    item.style.display = isEditable ? '' : 'none';
+  });
+
+  // Clamp position to viewport
+  const rect = menu.getBoundingClientRect();
+  let left = x;
+  let top = y;
+  if (left + 150 > window.innerWidth) left = window.innerWidth - 155;
+  if (top + rect.height > window.innerHeight) top = window.innerHeight - rect.height - 5;
+
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+  menu.style.display = 'block';
+}
+
+function hideContextMenu() {
+  if (contextMenu) contextMenu.style.display = 'none';
+}
+
+function isEditableTarget(el) {
+  const tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || el.isContentEditable;
+}
+
+function hasSelection() {
+  const sel = window.getSelection();
+  return sel && sel.toString().trim().length > 0;
+}
+
+document.addEventListener('contextmenu', function(e) {
+  const target = e.target;
+
+  // Show custom menu on editable fields, OR when text is selected anywhere.
+  if (!isEditableTarget(target) && !hasSelection()) {
+    hideContextMenu();
+    return;
+  }
+  e.preventDefault();
+  e.stopPropagation();
+  showContextMenu(e.clientX, e.clientY, isEditableTarget(target));
+}, true);
+
+// Close context menu on click elsewhere or scroll
+document.addEventListener('click', hideContextMenu);
+document.addEventListener('scroll', hideContextMenu, true);

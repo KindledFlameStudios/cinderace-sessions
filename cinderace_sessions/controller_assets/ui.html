@@ -39,7 +39,6 @@
   <!-- Tab bar -->
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="sessions">Sessions</button>
-    <button class="tab-btn" data-tab="projects">Projects</button>
     <button class="tab-btn" data-tab="summarizer">Summarizer</button>
     <button class="tab-btn" data-tab="settings">Settings</button>
     <button class="tab-btn" data-tab="clistatus">CLI Status</button>
@@ -61,10 +60,11 @@
           <option value="all">All CLIs</option>
         </select>
         <input type="text" class="filter-search" id="sessionSearch" placeholder="Search sessions..." />
+        <button class="filter-btn" id="btnToggleGroup" title="Toggle project grouping">📁 Group</button>
       </div>
 
       <div class="split-pane">
-        <!-- Left: session list -->
+        <!-- Left: project-grouped session list -->
         <div class="session-list" id="sessionList">
           <div class="empty-state" id="sessionsEmpty">
             <div class="empty-icon">📂</div>
@@ -98,25 +98,6 @@
       </div>
     </div>
 
-    <!-- ═══════════ PROJECTS TAB ═══════════ -->
-    <div class="tab-panel" id="tab-projects">
-
-      <div class="split-pane">
-        <div class="project-list" id="projectList">
-          <div class="empty-state">
-            <div class="empty-icon">📁</div>
-            <div class="empty-text">Loading projects...</div>
-          </div>
-        </div>
-        <div class="project-sessions" id="projectSessions">
-          <div class="empty-state">
-            <div class="empty-icon">📁</div>
-            <div class="empty-text">Select a project</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- ═══════════ SUMMARIZER TAB ═══════════ -->
     <div class="tab-panel" id="tab-summarizer">
 
@@ -142,7 +123,11 @@
         </div>
         <div class="form-row">
           <label class="form-label">Model</label>
-          <input type="text" class="form-input" id="summarizerModel" placeholder="gpt-4o, claude-3.5-sonnet, etc." />
+          <select class="form-select" id="summarizerModel" style="flex:1"></select>
+          <input type="text" class="form-input" id="summarizerModelManual" placeholder="Type model name..." style="flex:1;display:none" />
+        </div>
+        <div class="form-row">
+          <span class="status-text" id="modelFetchStatus" style="font-size:11px"></span>
         </div>
         <div class="form-row">
           <button class="action-btn" id="btnTestProvider">Test Connection</button>
@@ -168,8 +153,7 @@
 
       <div class="section">
         <div class="section-title">Summarize a Session</div>
-        <div class="form-row">
-          <label class="form-label">Select session</label>
+        <div class="form-row" id="summarizeRow">
           <select class="form-select" id="summarizeSessionSelect" style="flex:1">
             <option value="">— Select a session —</option>
           </select>

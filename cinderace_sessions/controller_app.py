@@ -381,6 +381,18 @@ class SessionsAPI:
         except Exception as e:
             return {"success": False, "provider": provider_name, "model": model, "error": str(e)}
 
+    def get_provider_models(self, provider: str = "", api_key: str = "") -> dict:
+        """Fetch available chat models for a provider.
+
+        If api_key is empty, uses the saved config key.
+        Returns: {ok, models: [{id, name, description, free}], live, msg}
+        """
+        from cinderace_sessions.summarizer.model_catalog import get_provider_models as _get_models
+        config = load_config()
+        provider = provider or config.get("summarizer_provider", "")
+        api_key = api_key or config.get("summarizer_api_key", "")
+        return _get_models(provider, api_key)
+
     def summarize_session(self, filepath: str, template_name: str = "default") -> dict:
         """Summarize a session using the configured LLM provider.
 
@@ -621,8 +633,13 @@ def run_gui():
         text_select=True,
     )
 
+    # Enable native context menus: WebView2 ties AreDefaultContextMenusEnabled
+    # to the debug flag, suppressing even the DOM contextmenu event when False.
+    # OPEN_DEVTOOLS_IN_DEBUG=False prevents the F12 DevTools popup.
+    webview.settings['OPEN_DEVTOOLS_IN_DEBUG'] = False
+
     api._window = window
-    webview.start(debug=False)
+    webview.start(debug=True)
 
 
 def main():

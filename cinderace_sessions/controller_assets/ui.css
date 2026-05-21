@@ -161,25 +161,22 @@ html, body {
   white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;
 }
 
-/* Project list */
-.project-list {
-  width: 280px; min-width: 220px; overflow-y: auto;
-  background: var(--bg-surface); border: 1px solid var(--border);
-  border-radius: var(--radius); flex-shrink: 0;
+/* Project-grouped session list headers */
+.project-group-header {
+  padding: 8px 12px; background: var(--bg-raised);
+  border-bottom: 1px solid var(--border); cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  user-select: none; transition: background 0.15s;
 }
-.project-item {
-  padding: 10px 12px; border-bottom: 1px solid var(--border);
-  cursor: pointer; transition: background 0.15s;
-}
-.project-item:hover { background: var(--bg-raised); }
-.project-item.selected { background: var(--bg-elevated); border-left: 3px solid var(--ember); }
-.project-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
-.project-meta { font-size: 11px; color: var(--fg-muted); }
+.project-group-header:hover { background: var(--bg-elevated); }
+.project-group-header.expanded { border-left: 3px solid var(--ember); }
+.project-group-name { font-weight: 700; font-size: 12.5px; color: var(--ember-glow); flex: 1; }
+.project-group-count { font-size: 11px; color: var(--fg-muted); }
+.project-group-chevron { color: var(--fg-muted); font-size: 11px; transition: transform 0.15s; }
+.project-group-header.expanded .project-group-chevron { transform: rotate(90deg); }
 
-.project-sessions {
-  flex: 1; overflow-y: auto; background: var(--bg-surface);
-  border: 1px solid var(--border); border-radius: var(--radius);
-}
+.project-group-sessions { display: none; }
+.project-group-sessions.expanded { display: block; }
 
 /* Sections & Forms */
 .section {
@@ -214,6 +211,10 @@ html, body {
   resize: vertical;
 }
 .form-textarea:focus { border-color: var(--ember); outline: none; }
+
+/* Summarizer session row — no label, centered */
+#summarizeRow { justify-content: center; }
+#summarizeRow .form-select { flex: 1; max-width: 400px; }
 
 /* Buttons */
 .action-btn {
