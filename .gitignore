@@ -11,6 +11,7 @@ deploy.sh
 .env.*
 .claude/
 .cline/
+.firecrawl/
 *.log
 .DS_Store
 pushgit.sh
