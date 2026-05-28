@@ -254,6 +254,8 @@ async function detectCLIs() {
 
   // Render CLI status tab
   renderCliStatus(clis);
+  // Render Custom CLIs in Settings
+  renderCustomClis(clis);
 }
 
 async function refreshSessions() {
@@ -463,10 +465,10 @@ async function exportSession() {
   if (!currentSession) { toast('Select a session first', 'error'); return; }
   const format = $('#exportFormat').value;
   const result = await callApi('export_session', currentSession.filepath, format);
-  if (result) {
+  if (result && !result.startsWith('Error:')) {
     toast(`Exported to ${result}`, 'success');
   } else {
-    toast('Export failed', 'error');
+    toast(result || 'Export failed', 'error');
   }
 }
 
@@ -564,6 +566,40 @@ async function saveCustomCli() {
   } else {
     toast('Failed to add CLI (name exists?)', 'error');
   }
+}
+
+async function removeCustomCli(name) {
+  if (!confirm(`Remove custom CLI "${name}"?`)) return;
+  const ok = await callApi('remove_custom_cli', name);
+  if (ok) {
+    toast('CLI removed', 'success');
+    await detectCLIs();
+    await refreshSessions();
+  } else {
+    toast('Failed to remove CLI', 'error');
+  }
+}
+
+function renderCustomClis(clis) {
+  const container = $('#customCliList');
+  if (!container) return;
+  const custom = clis.filter(c => c.custom);
+  if (custom.length === 0) {
+    container.innerHTML = '<div class="empty-state">No custom CLIs configured</div>';
+    return;
+  }
+  container.innerHTML = custom.map(cli => `
+    <div class="cli-status-card" style="margin-bottom:10px; border-left:3px solid ${cli.color}">
+      <div class="cli-status-header">
+        <span class="cli-status-name">${escapeHtml(cli.display_name)}</span>
+        <button class="action-btn" onclick="removeCustomCli('${escapeHtml(cli.display_name)}')" style="padding:2px 8px">Remove</button>
+      </div>
+      <div class="cli-status-meta">
+        <div>Dir: ${escapeHtml(cli.directory)}</div>
+        <div>Format: ${escapeHtml(cli.format)}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 async function rescanCli(cliName) {
@@ -887,10 +923,10 @@ async function exportSummary() {
     return;
   }
   const result = await callApi('export_summary_markdown', currentSummary.content, currentSummary.model || '');
-  if (result) {
+  if (result && !result.startsWith('Error:')) {
     toast(`Exported to ${result}`, 'success');
   } else {
-    toast('Export failed', 'error');
+    toast(result || 'Export failed', 'error');
   }
 }
 
