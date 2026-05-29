@@ -648,7 +648,13 @@ def run_gui():
 
 def main():
     """Entry point for the controller."""
-    run_gui()
+    try:
+        run_gui()
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user, shutting down")
+    except Exception as e:
+        logger.critical("Unhandled exception in controller", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

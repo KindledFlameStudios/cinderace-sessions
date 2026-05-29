@@ -16,7 +16,24 @@ function $(sel) { return document.querySelector(sel); }
 function $$(sel) { return document.querySelectorAll(sel); }
 
 function callApi(method, ...args) {
-  if (api) return api[method](...args);
+  if (api) {
+    try {
+      const result = api[method](...args);
+      // Handle both sync returns and promise returns
+      if (result && typeof result.catch === 'function') {
+        return result.catch(err => {
+          console.error(`API error: ${method}`, err);
+          toast(`Error: ${method} — ${err.message || err}`, 'error');
+          return null;
+        });
+      }
+      return result;
+    } catch (err) {
+      console.error(`API error: ${method}`, err);
+      toast(`Error: ${method} — ${err.message || err}`, 'error');
+      return Promise.resolve(null);
+    }
+  }
   return Promise.resolve(null);
 }
 
@@ -998,6 +1015,17 @@ function viewHistoryEntry(index) {
     if (panel) panel.classList.add('active');
   });
 }
+
+// ── Global error handling ─────────────────────────────────────────────
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+  toast('An unexpected error occurred', 'error');
+});
+
+window.addEventListener('error', (event) => {
+  console.error('Uncaught error:', event.error || event.message);
+});
 
 // ── Utility ─────────────────────────────────────────────────────────
 
