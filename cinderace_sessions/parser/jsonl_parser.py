@@ -332,6 +332,24 @@ def read_preview(filepath: str, max_chars: int = 100) -> str:
         "Filesystem sandboxing",
         "Collaboration Mode:",
         "<permissions",
+        "You are Codex",
+        "You are an AI",
+        "# 🏠",
+    )
+
+    CONTEXT_PATTERNS = (
+        # Codex: environment context block
+        "<environment_context>",
+        # Codex: collaboration mode instructions
+        "<collaboration_mode>",
+        # Codex: permission/plugin blocks
+        "<permissions instructions>",
+        "<apps_instructions>",
+        "<skills_instructions>",
+        "<plugins_instructions>",
+        "<ember-memory>",
+        # Codex: instruction wrapper
+        "<INSTRUCTIONS>",
     )
 
     def _is_context(text: str) -> bool:
@@ -339,11 +357,25 @@ def read_preview(filepath: str, max_chars: int = 100) -> str:
         clean = re.sub(r"<[^>]*>", "", text).strip()
         if not clean or len(clean) < 5:
             return True
+        # Very long blocks are almost always system instructions
+        if len(clean) > 2000:
+            return True
         for prefix in CONTEXT_PREFIXES:
             if clean.startswith(prefix):
                 return True
+        # Check for context patterns in the raw text
+        for pattern in CONTEXT_PATTERNS:
+            if pattern in text:
+                return True
         # XML-heavy content (env context like <cwd>, <shell>, etc.)
         if clean.count("<") > 3 and clean.count(">") > 3:
+            return True
+        # Codex instruction blocks: start with "You are" and contain "##"
+        if clean.startswith("You are") and "##" in clean:
+            return True
+        # Multi-line instruction blocks that contain directive markers
+        directive_count = clean.count("##") + clean.count("- **") + clean.count("NEVER ") + clean.count("ALWAYS ")
+        if directive_count >= 3:
             return True
         return False
 
