@@ -249,6 +249,7 @@ async function loadSettings() {
   // Set model value after fetching models (dropdown may not be populated yet)
   if (config.summarizer_model) savedModelValue = config.summarizer_model;
   if (config.default_ember_collection) $('#emberCollection').value = config.default_ember_collection;
+  if (config.ember_memory_url) $('#emberMemoryUrl').value = config.ember_memory_url;
 }
 
 // ── Session Loading ────────────────────────────────────────────────
@@ -391,7 +392,7 @@ function renderGroupedView(list, sessions) {
       .map(c => `<span class="cli-badge ${cliBadgeClass(c)}">${cliDisplayName(c)}</span>`).join(' ');
 
     html += `
-      <div class="project-group-header ${isExpanded ? 'expanded' : ''}" data-project="${escapeHtml(group.name)}" onclick="toggleProjectGroup(this, '${escapeHtml(group.name).replace(/'/g, "\\'")}')">
+      <div class="project-group-header ${isExpanded ? 'expanded' : ''}" data-project="${escapeHtml(group.name)}" onclick="toggleProjectGroup(this, this.dataset.project)">
         <span class="project-group-chevron">▶</span>
         <span class="project-group-name">${escapeHtml(group.name)}</span>
         <span class="project-group-count">${group.sessions.length} session${group.sessions.length !== 1 ? 's' : ''}</span>
@@ -526,7 +527,7 @@ function renderCliStatus(clis) {
         ${cli.custom ? `<div>Format: ${cli.format} | Color: ${cli.color}</div>` : ''}
       </div>
       <div class="cli-status-actions">
-        <button class="action-btn" onclick="rescanCli('${cli.name}')">Rescan</button>
+        <button class="action-btn" data-cli-scan="${escapeHtml(cli.name)}" onclick="rescanCli(this.dataset.cliScan)">Rescan</button>
       </div>
     </div>
   `).join('');
@@ -549,6 +550,7 @@ async function saveSettings() {
     summarizer_model: getModelValue(),
     summarizer_custom_url: $('#summarizerCustomUrl')?.value || '',
     default_ember_collection: $('#emberCollection')?.value || 'general',
+    ember_memory_url: $('#emberMemoryUrl')?.value || '',
   };
 
   const ok = await callApi('save_settings', settings);
@@ -609,7 +611,7 @@ function renderCustomClis(clis) {
     <div class="cli-status-card" style="margin-bottom:10px; border-left:3px solid ${cli.color}">
       <div class="cli-status-header">
         <span class="cli-status-name">${escapeHtml(cli.display_name)}</span>
-        <button class="action-btn" onclick="removeCustomCli('${escapeHtml(cli.display_name)}')" style="padding:2px 8px">Remove</button>
+        <button class="action-btn" data-cli-name="${escapeHtml(cli.display_name)}" onclick="removeCustomCli(this.dataset.cliName)" style="padding:2px 8px">Remove</button>
       </div>
       <div class="cli-status-meta">
         <div>Dir: ${escapeHtml(cli.directory)}</div>
@@ -692,9 +694,9 @@ async function fetchModels(provider) {
   sel.style.display = '';
   if (manual) manual.style.display = 'none';
 
-  // Check cache first
+  // Check cache first (keyed by provider + api key)
   const apiKey = $('#summarizerApiKey')?.value || '';
-  const cacheKey = provider + ':' + (apiKey ? 'key' : 'nokey');
+  const cacheKey = provider + ':' + (apiKey ? btoa(apiKey).slice(0, 8) : 'nokey');
   if (modelCache[cacheKey]) {
     populateModelDropdown(sel, modelCache[cacheKey]);
     if (statusEl) statusEl.textContent = modelCache[cacheKey].live ? '' : modelCache[cacheKey].msg || 'Built-in models';
@@ -1031,7 +1033,13 @@ window.addEventListener('error', (event) => {
 
 function escapeHtml(text) {
   if (!text) return '';
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\//g, '&#x2F;');
 }
 
 function getModelValue() {

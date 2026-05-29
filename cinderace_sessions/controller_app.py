@@ -277,11 +277,13 @@ class SessionsAPI:
         try:
             import requests
 
+            config = load_config()
+            ember_url = config.get("ember_memory_url", "http://localhost:2214").rstrip("/")
             tags_str = tags or f"cli:{source},project:{meta.slug or 'unknown'},date:{meta.first_date}"
             source_str = f"cinderace-sessions:{source}"
 
             resp = requests.post(
-                "http://localhost:2214/tools/memory_store",
+                f"{ember_url}/tools/memory_store",
                 json={
                     "content": content[:8000],
                     "collection": collection,

@@ -28,6 +28,7 @@ DEFAULTS: dict[str, Any] = {
     "summarizer_model": "",
     "summarizer_custom_url": "",
     "default_ember_collection": "general",
+    "ember_memory_url": "http://localhost:2214",
 }
 
 CONFIG_DIR = Path.home() / ".cinderace-sessions"
@@ -75,11 +76,20 @@ def load_config() -> dict[str, Any]:
 
 
 def save_settings(settings: dict[str, Any]) -> bool:
-    """Persist user settings to disk. Returns True on success."""
+    """Persist user settings to disk. Returns True on success.
+
+    Sets file permissions to owner-only (0o600) since the file
+    may contain API keys.
+    """
     _ensure_config_dir()
     try:
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
+        # Protect API keys — owner read/write only
+        try:
+            os.chmod(SETTINGS_FILE, 0o600)
+        except OSError:
+            pass  # Windows doesn't support Unix permissions
         return True
     except OSError:
         return False
@@ -103,6 +113,10 @@ def save_custom_clis(clis: list[dict[str, Any]]) -> bool:
     try:
         with open(CUSTOM_CLIS_FILE, "w", encoding="utf-8") as f:
             json.dump({"custom_clis": clis}, f, indent=2, ensure_ascii=False)
+        try:
+            os.chmod(CUSTOM_CLIS_FILE, 0o600)
+        except OSError:
+            pass  # Windows doesn't support Unix permissions
         return True
     except OSError:
         return False
