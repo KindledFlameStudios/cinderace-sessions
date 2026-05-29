@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime
 from pathlib import Path
 
 from cinderace_sessions.detector.base import CLIDetector

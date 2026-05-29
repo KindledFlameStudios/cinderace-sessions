@@ -894,7 +894,7 @@ async function summarizeCurrentSession() {
         metaDiv.innerHTML = `
           <span>🤖 ${escapeHtml(result.model || 'Unknown')}</span>
           <span>🔢 ${result.tokens_used || 0} tokens</span>
-          <span>📄 ${escapeHtml(Path_name(filepath))}</span>
+          <span>📄 ${escapeHtml(pathBasename(filepath))}</span>
         `;
       }
       if (resultDiv) resultDiv.textContent = result.content || 'No content returned';
@@ -918,7 +918,7 @@ async function summarizeCurrentSession() {
   }
 }
 
-function Path_name(filepath) {
+function pathBasename(filepath) {
   // Simple basename extraction
   return filepath.split('/').pop().replace(/\.[^.]+$/, '');
 }
@@ -1108,11 +1108,17 @@ function showContextMenu(x, y, isEditable) {
     item.style.display = isEditable ? '' : 'none';
   });
 
-  // Clamp position to viewport
+  // Show menu briefly offscreen to measure, then position
+  menu.style.left = '-9999px';
+  menu.style.top = '-9999px';
+  menu.style.display = 'block';
   const rect = menu.getBoundingClientRect();
+  menu.style.display = 'none';
+
+  // Clamp position to viewport
   let left = x;
   let top = y;
-  if (left + 150 > window.innerWidth) left = window.innerWidth - 155;
+  if (left + rect.width > window.innerWidth) left = window.innerWidth - rect.width - 5;
   if (top + rect.height > window.innerHeight) top = window.innerHeight - rect.height - 5;
 
   menu.style.left = left + 'px';

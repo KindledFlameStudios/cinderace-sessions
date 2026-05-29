@@ -13,7 +13,6 @@ import json
 import logging
 import urllib.request
 import urllib.error
-import urllib.parse
 
 logger = logging.getLogger(__name__)
 

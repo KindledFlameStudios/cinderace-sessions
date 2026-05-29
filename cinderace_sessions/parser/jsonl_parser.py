@@ -355,7 +355,11 @@ def read_preview(filepath: str, max_chars: int = 100) -> str:
     def _is_context(text: str) -> bool:
         """Return True if this text is system context, not human input."""
         clean = re.sub(r"<[^>]*>", "", text).strip()
-        if not clean or len(clean) < 5:
+        if not clean:
+            return True
+        # Very short messages (< 3 chars) are ambiguous — err on the side of
+        # showing them. Only skip empty or whitespace-only content.
+        if len(clean) < 2:
             return True
         # Very long blocks are almost always system instructions
         if len(clean) > 2000:

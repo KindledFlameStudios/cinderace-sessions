@@ -551,13 +551,15 @@ class SessionsAPI:
         import requests as req
 
         try:
+            config = load_config()
+            ember_url = config.get("ember_memory_url", "http://localhost:2214").rstrip("/")
             tags = "summary,cinderace-sessions"
             if filepath:
                 tags += f",{Path(filepath).stem}"
             source = "cinderace-sessions:summarizer"
 
             resp = req.post(
-                "http://localhost:2214/tools/memory_store",
+                f"{ember_url}/tools/memory_store",
                 json={
                     "content": content[:8000],
                     "collection": collection,

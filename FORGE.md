@@ -32,7 +32,7 @@ cinderace-sessions controller   # Foreground (for development)
 cinderace_sessions/
   __main__.py              # CLI dispatcher + logging setup
   controller_app.py        # SessionsAPI backend + pywebview window
-  config.py                # Config management (YAML in ~/.cinderace-sessions/)
+  config.py                # Config management (JSON in ~/.cinderace-sessions/)
   single_instance.py       # Prevents multiple app instances
   detector/                # Scanners for CLI session files
     base.py                # CLIDetector base class, SessionInfo dataclass
