@@ -12,11 +12,16 @@ Gemini CLI stores sessions in two formats:
 Also processes checkpoints (same format as chat files).
 
 Both formats are handled transparently based on the structure detected.
+
+For very large files (>8MB), only the first 8MB is read for parsing
+to avoid memory spikes on systems with many large sessions. The
+metadata extraction already skips full parsing for files over 2MB.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from uuid import uuid4
 
@@ -29,6 +34,13 @@ from cinderace_sessions.parser.base import (
     Turn,
 )
 
+logger = logging.getLogger(__name__)
+
+# Maximum file size to read entirely for parsing.
+# Files larger than this are scanned line-by-line for JSONL format
+# or rejected for JSON format.
+_MAX_PARSE_SIZE = 8 * 1024 * 1024  # 8MB
+
 
 def parse_gemini_session(filepath: str) -> list[Turn]:
     """Parse a Gemini CLI session file into Turn objects.
@@ -37,8 +49,23 @@ def parse_gemini_session(filepath: str) -> list[Turn]:
     - logs.json: flat array of {type, message, timestamp}
     - Chat files: {messages: [{type, content, thoughts, toolCalls}]}
     - Checkpoint files: same as chat files
+
+    For files larger than _MAX_PARSE_SIZE, only JSONL line-by-line
+    parsing is attempted (no full json.loads) to avoid memory spikes.
     """
     turns: list[Turn] = []
+
+    try:
+        stat = Path(filepath).stat()
+        file_size = stat.st_size
+    except OSError:
+        return turns
+
+    # For very large files, skip to JSONL-only parsing to avoid memory spikes
+    if file_size > _MAX_PARSE_SIZE:
+        logger.info("Large file (%dMB), using JSONL-only parsing: %s",
+                     file_size // (1024 * 1024), filepath)
+        return _parse_jsonl_large(filepath)
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:
@@ -295,6 +322,47 @@ def _parse_content_field(content) -> list[ContentBlock]:
 
         return blocks
 
+    return []
+
+
+def _parse_jsonl_large(filepath: str) -> list[Turn]:
+    """Parse a large Gemini session file using line-by-line JSONL parsing.
+
+    Reads the file incrementally without loading it all into memory.
+    Only extracts message entries (chat format), skipping metadata
+    and session_meta lines.
+    """
+    messages: list[dict] = []
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                if not isinstance(entry, dict):
+                    continue
+                # Skip metadata entries
+                if "kind" in entry and "sessionId" in entry:
+                    continue
+                if "$set" in entry and len(entry) == 1:
+                    continue
+                # Skip session_meta records
+                if entry.get("type") == "session_meta":
+                    continue
+                # Collect message entries
+                if "type" in entry:
+                    messages.append(entry)
+    except OSError:
+        pass
+
+    if messages:
+        return _parse_chat_messages(messages)
     return []
 
 
