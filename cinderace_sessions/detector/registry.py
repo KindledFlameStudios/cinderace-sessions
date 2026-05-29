@@ -6,8 +6,11 @@ method that discovers sessions from all enabled sources.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from cinderace_sessions.config import load_custom_clis, save_custom_clis
 from cinderace_sessions.detector.base import CLIDetector
@@ -195,6 +198,7 @@ class DetectorRegistry:
                 sessions = detector.find_sessions()
                 all_sessions.extend(sessions)
             except Exception:
+                logger.debug("Skipping %s due to error", detector, exc_info=True)
                 continue
 
         for detector in self._custom:
@@ -207,6 +211,7 @@ class DetectorRegistry:
                 sessions = detector.find_sessions()
                 all_sessions.extend(sessions)
             except Exception:
+                logger.debug("Skipping custom %s due to error", detector, exc_info=True)
                 continue
 
         # Sort by mtime descending (newest first)

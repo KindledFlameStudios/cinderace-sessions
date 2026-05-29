@@ -7,9 +7,12 @@ Supports CODEX_HOME env var override.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from cinderace_sessions.detector.base import CLIDetector
 from cinderace_sessions.parser.base import SessionInfo
@@ -59,6 +62,7 @@ class CodexDetector(CLIDetector):
                     if info:
                         sessions.append(info)
                 except Exception:
+                    logger.debug("Failed to build session info for %s", jsonl_file, exc_info=True)
                     continue
         except OSError:
             pass

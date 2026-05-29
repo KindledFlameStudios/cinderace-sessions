@@ -1,9 +1,30 @@
 """CinderACE Sessions v2 — entry point for all commands."""
 
+import logging
 import os
 import subprocess
 import sys
 from datetime import datetime
+
+
+def _configure_logging():
+    """Set up centralized logging for the application."""
+    log_dir = os.path.join(os.path.expanduser("~"), ".cinderace-sessions")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "cinderace-sessions.log")
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.FileHandler(log_file, encoding="utf-8"),
+            logging.StreamHandler(sys.stderr),
+        ],
+    )
+    # Quiet noisy third-party loggers
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("webview").setLevel(logging.INFO)
 
 
 def _open_launch_log(name: str):
@@ -59,6 +80,10 @@ def launch_tray():
 
 
 def main():
+    _configure_logging()
+    logger = logging.getLogger(__name__)
+    logger.info("CinderACE Sessions v2 starting")
+
     cmd = sys.argv[1] if len(sys.argv) > 1 else "launch"
 
     if cmd in {"launch", "app"}:

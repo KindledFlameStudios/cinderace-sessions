@@ -7,6 +7,7 @@ to the JavaScript frontend via pywebview's bridge.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +30,8 @@ from cinderace_sessions.parser.jsonl_parser import (
     parse_jsonl_transcript,
 )
 from cinderace_sessions.parser.gemini_parser import parse_gemini_session, gemini_extract_meta
+
+logger = logging.getLogger(__name__)
 
 
 def _load_asset(filename: str) -> str:
@@ -220,6 +223,7 @@ class SessionsAPI:
             return out_path
 
         except Exception as e:
+            logger.error("Export failed for %s: %s", filepath, e, exc_info=True)
             return f"Error: {str(e)}"
 
     # ── ember-memory Bridge ──────────────────────────────────────────

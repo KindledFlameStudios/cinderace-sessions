@@ -6,6 +6,7 @@ with filtering for command stubs and entrypoint types.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,8 @@ from pathlib import Path
 from cinderace_sessions.detector.base import CLIDetector
 from cinderace_sessions.parser.base import SessionInfo
 from cinderace_sessions.parser.jsonl_parser import extract_session_meta, read_preview, read_custom_title
+
+logger = logging.getLogger(__name__)
 
 
 class ClaudeCodeDetector(CLIDetector):
@@ -55,6 +58,7 @@ class ClaudeCodeDetector(CLIDetector):
                         if info:
                             sessions.append(info)
                     except Exception:
+                        logger.debug("Failed to build session info for %s", jsonl_file, exc_info=True)
                         continue
         except OSError:
             pass

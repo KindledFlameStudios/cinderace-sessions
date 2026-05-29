@@ -178,6 +178,7 @@ def fetch_openai_models(api_key: str) -> dict:
             "openai",
             f"Could not refresh: {friendly_auth_error(str(e.reason))}")
     except Exception as e:
+        logger.debug("OpenAI model fetch failed: %s", e, exc_info=True)
         return _static_models(
             "openai",
             f"Could not refresh: {friendly_auth_error(str(e))}")
@@ -224,6 +225,7 @@ def fetch_anthropic_models(api_key: str) -> dict:
             "anthropic",
             f"Could not refresh: {friendly_auth_error(str(e.reason))}")
     except Exception as e:
+        logger.debug("Anthropic model fetch failed: %s", e, exc_info=True)
         return _static_models(
             "anthropic",
             f"Could not refresh: {friendly_auth_error(str(e))}")
@@ -284,6 +286,7 @@ def fetch_openrouter_models(api_key: str) -> dict:
             "openrouter",
             f"Could not refresh: {friendly_auth_error(str(e.reason))}")
     except Exception as e:
+        logger.debug("OpenRouter model fetch failed: %s", e, exc_info=True)
         return _static_models(
             "openrouter",
             f"Could not refresh: {friendly_auth_error(str(e))}")
@@ -321,6 +324,7 @@ def fetch_ollama_models() -> dict:
             "msg": "",
         }
     except Exception as e:
+        logger.debug("Ollama model fetch failed: %s", e, exc_info=True)
         return {
             "ok": False,
             "models": [],

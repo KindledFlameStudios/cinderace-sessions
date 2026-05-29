@@ -11,8 +11,11 @@ Supports GEMINI_CLI_HOME env var override.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from cinderace_sessions.detector.base import CLIDetector
 from cinderace_sessions.parser.base import SessionInfo
@@ -112,6 +115,7 @@ class GeminiCLIDetector(CLIDetector):
                         if info:
                             sessions.append(info)
                     except Exception:
+                        logger.debug("Failed to build session info for %s", filepath, exc_info=True)
                         pass
 
         except OSError:
