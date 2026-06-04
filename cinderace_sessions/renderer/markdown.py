@@ -164,7 +164,7 @@ def build_document(
     # Header
     title = meta.slug or meta.session_id or "session"
     parts.append(f"# Session Digest: {title}\n")
-    parts.append(f"**Source:** `{meta.session_id}.jsonl`")
+    parts.append(f"**Source:** `{meta.session_id}`")
 
     if stats.first_timestamp:
         first_time = format_timestamp(stats.first_timestamp)

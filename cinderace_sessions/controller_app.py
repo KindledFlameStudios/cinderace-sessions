@@ -29,6 +29,7 @@ from cinderace_sessions.parser.jsonl_parser import (
     extract_session_meta,
     parse_jsonl_transcript,
 )
+from cinderace_sessions.parser.forge_parser import parse_forge_session, forge_extract_meta
 from cinderace_sessions.parser.gemini_parser import parse_gemini_session, gemini_extract_meta
 
 logger = logging.getLogger(__name__)
@@ -219,7 +220,12 @@ class SessionsAPI:
             output_dir = os.path.join(os.path.expanduser("~"), "CinderACE-Exports")
         os.makedirs(output_dir, exist_ok=True)
 
-        base_name = Path(filepath).stem
+        # For forge sessions (filepath contains ::session_id), use slug or
+        # session ID as the base name instead of the .db filename
+        if "::" in filepath:
+            base_name = meta.slug or meta.session_id or "forge-session"
+        else:
+            base_name = Path(filepath).stem
 
         try:
             if format == "md":
@@ -631,7 +637,11 @@ class SessionsAPI:
         try:
             filepath_lower = filepath.lower()
 
-            if source == "gemini-cli":
+            if source.startswith("forge-"):
+                # Fire Forge sessions — stored in SQLite, filepath encodes session ID
+                turns = parse_forge_session(filepath, source)
+                meta = forge_extract_meta(filepath, source)
+            elif source == "gemini-cli":
                 # All Gemini files go through the Gemini parser (handles both JSON and JSONL)
                 turns = parse_gemini_session(filepath)
                 meta = gemini_extract_meta(filepath)

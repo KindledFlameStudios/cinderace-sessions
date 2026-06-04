@@ -16,6 +16,7 @@ from cinderace_sessions.config import load_custom_clis, save_custom_clis
 from cinderace_sessions.detector.base import CLIDetector
 from cinderace_sessions.detector.claude_code import ClaudeCodeDetector
 from cinderace_sessions.detector.codex import CodexDetector
+from cinderace_sessions.detector.forge import ForgeDetector
 from cinderace_sessions.detector.gemini_cli import GeminiCLIDetector
 from cinderace_sessions.parser.base import SessionInfo
 
@@ -118,6 +119,7 @@ class DetectorRegistry:
         self._built_in: list[CLIDetector] = [
             ClaudeCodeDetector(),
             CodexDetector(),
+            ForgeDetector(),
             GeminiCLIDetector(),
         ]
         self._custom: list[CustomCLIDetector] = []
