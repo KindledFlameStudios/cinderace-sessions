@@ -245,7 +245,7 @@ async function loadSettings() {
       if (manual) manual.style.display = '';
     }
   }
-  if (config.summarizer_api_key) $('#summarizerApiKey').value = config.summarizer_api_key;
+  if (config.has_api_key) $('#summarizerApiKey').value = '••••••••';
   // Set model value after fetching models (dropdown may not be populated yet)
   if (config.summarizer_model) savedModelValue = config.summarizer_model;
   if (config.default_ember_collection) $('#emberCollection').value = config.default_ember_collection;
@@ -546,7 +546,12 @@ async function saveSettings() {
     assistant_label: $('#assistantLabel')?.value || 'Assistant',
     auto_detect_on_launch: $('#autoDetect')?.checked ?? true,
     summarizer_provider: $('#summarizerProvider')?.value || '',
-    summarizer_api_key: $('#summarizerApiKey')?.value || '',
+    // Preserve existing API key if the user didn't change the masked field.
+    // The masked value '••••••••' means "unchanged" — don't overwrite.
+    // An empty field means "clear the key". Any other value is a new key.
+    summarizer_api_key: $('#summarizerApiKey')?.value === '••••••••'
+      ? ''   // Masked = unchanged, send empty so backend preserves the real key
+      : ($('#summarizerApiKey')?.value || ''),
     summarizer_model: getModelValue(),
     summarizer_custom_url: $('#summarizerCustomUrl')?.value || '',
     default_ember_collection: $('#emberCollection')?.value || 'general',

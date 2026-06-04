@@ -67,9 +67,26 @@ class SessionsAPI:
     # ── Config ─────────────────────────────────────────────────────
 
     def get_config(self) -> dict:
-        return load_config()
+        """Return config for the JS frontend, with sensitive fields redacted."""
+        config = load_config()
+        # Never send API keys to the frontend — they don't need them.
+        # The backend handles all LLM calls; JS only needs the key's presence state.
+        has_key = bool(config.get("summarizer_api_key", ""))
+        config["has_api_key"] = has_key
+        config["summarizer_api_key"] = ""  # Redact — never send to JS
+        return config
 
     def save_settings(self, settings: dict) -> bool:
+        """Save user settings, preserving API key if the frontend sent an empty one.
+
+        The frontend redacts the API key (sends '' when unchanged). We must
+        preserve the existing key rather than overwriting it with ''.
+        """
+        # If the frontend sent an empty API key, preserve the existing one
+        if not settings.get("summarizer_api_key"):
+            current = load_config()
+            settings["summarizer_api_key"] = current.get("summarizer_api_key", "")
+
         result = save_settings(settings)
         if result:
             # Also refresh registry if custom CLIs changed
@@ -99,8 +116,27 @@ class SessionsAPI:
         self._sessions_cache = [self._session_info_to_dict(s) for s in sessions]
         return self._sessions_cache
 
+    # ── Filepath Validation ────────────────────────────────────────
+
+    def _validate_filepath(self, filepath: str) -> str | None:
+        """Validate that a filepath exists in the session cache.
+
+        Prevents arbitrary file access via the JS bridge — only filepaths
+        that came from a real detector scan are accepted.
+        Returns the validated filepath, or None if not found.
+        """
+        for s in self._sessions_cache:
+            if s.get("filepath") == filepath:
+                return filepath
+        logger.warning("Rejected filepath not in session cache: %s", filepath)
+        return None
+
     def get_session_detail(self, filepath: str) -> dict | None:
         """Return full parsed session data for preview."""
+        if not self._validate_filepath(filepath):
+            logger.error("get_session_detail: unvalidated filepath rejected")
+            return None
+
         # Find the session info to determine source
         source = "unknown"
         for s in self._sessions_cache:
@@ -151,6 +187,10 @@ class SessionsAPI:
 
     def export_session(self, filepath: str, format: str) -> str | None:
         """Export a session to the specified format. Returns output file path."""
+        if not self._validate_filepath(filepath):
+            logger.error("export_session: unvalidated filepath rejected")
+            return None
+
         source = "unknown"
         for s in self._sessions_cache:
             if s.get("filepath") == filepath:
@@ -251,6 +291,10 @@ class SessionsAPI:
 
     def ingest_session(self, filepath: str, collection: str = "general", tags: str = "") -> bool:
         """Ingest a session into ember-memory via HTTP MCP server."""
+        if not self._validate_filepath(filepath):
+            logger.error("ingest_session: unvalidated filepath rejected")
+            return False
+
         source = "unknown"
         for s in self._sessions_cache:
             if s.get("filepath") == filepath:
@@ -293,7 +337,8 @@ class SessionsAPI:
                 timeout=30,
             )
             return resp.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.error("ember-memory ingest failed for %s: %s", filepath, e, exc_info=True)
             return False
 
     # ── Custom CLIs ─────────────────────────────────────────────────
@@ -404,6 +449,10 @@ class SessionsAPI:
 
         Returns a dict with: success, content/error, model, tokens_used.
         """
+        if not self._validate_filepath(filepath):
+            logger.error("summarize_session: unvalidated filepath rejected")
+            return {"success": False, "error": "Invalid session filepath", "content": ""}
+
         from cinderace_sessions.summarizer.engine import get_provider, SummarizeResult
         from cinderace_sessions.summarizer.template import load_template
         from cinderace_sessions.summarizer.ollama import OllamaProvider
@@ -495,7 +544,8 @@ class SessionsAPI:
             try:
                 with open(history_path, "r", encoding="utf-8") as f:
                     history = json.load(f)
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Summary history load failed: %s", e)
                 history = []
 
         history.append({
@@ -516,8 +566,9 @@ class SessionsAPI:
         try:
             with open(history_path, "w", encoding="utf-8") as f:
                 json.dump(history, f, indent=2, ensure_ascii=False)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.error("Failed to save summary history: %s", e)
+            # Non-fatal — summary was generated, just not persisted
 
     # ── Summary Export & Ingest ──────────────────────────────────────
 
@@ -569,7 +620,8 @@ class SessionsAPI:
                 timeout=30,
             )
             return resp.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.error("ember-memory summary ingest failed: %s", e, exc_info=True)
             return False
 
     # ── Internal Helpers ─────────────────────────────────────────────
@@ -597,8 +649,7 @@ class SessionsAPI:
             return turns, meta
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.error("Parse session failed for %s (%s): %s", filepath, source, e, exc_info=True)
             return None, None
 
     @staticmethod
