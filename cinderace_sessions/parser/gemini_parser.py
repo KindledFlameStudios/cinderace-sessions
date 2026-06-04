@@ -366,12 +366,6 @@ def _parse_jsonl_large(filepath: str) -> list[Turn]:
     return []
 
 
-def gemini_build_stats(turns: list[Turn]) -> SessionStats:
-    """Compute stats for Gemini sessions. Same logic as JSONL build_stats."""
-    from cinderace_sessions.parser.jsonl_parser import build_stats
-    return build_stats(turns)
-
-
 def gemini_extract_meta(filepath: str) -> SessionMeta:
     """Extract metadata from a Gemini CLI session file.
 
@@ -405,8 +399,6 @@ def gemini_extract_meta(filepath: str) -> SessionMeta:
                 meta.slug = date_part
         else:
             meta.slug = filename
-        # Parent directory provides project context (stored in SessionInfo, not SessionMeta)
-        _ = Path(filepath).parent.name
     else:
         parent = Path(filepath).parent.name
         meta.session_id = f"{parent}-{filename}"

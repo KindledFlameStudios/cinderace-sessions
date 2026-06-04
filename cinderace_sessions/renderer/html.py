@@ -21,8 +21,13 @@ from cinderace_sessions.renderer.markdown import format_tool_detail, format_time
 
 
 def escape_html(text: str) -> str:
-    """Escape HTML special characters."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    """Escape HTML special characters including single quotes and forward slashes."""
+    return (text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace('"', "&quot;")
+                .replace("'", "&#x27;")
+                .replace("/", "&#x2F;"))
 
 
 # ── Theme Definitions (36 CSS variables each) ────────────────────────

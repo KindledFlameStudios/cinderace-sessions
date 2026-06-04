@@ -503,8 +503,6 @@ async function ingestSession() {
   }
 }
 
-// ── Projects (legacy — now handled by grouped view) ────────────────
-
 // ── CLI Status ──────────────────────────────────────────────────────
 
 function renderCliStatus(clis) {

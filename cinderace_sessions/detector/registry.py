@@ -111,11 +111,6 @@ class CustomCLIDetector(CLIDetector):
         return sessions
 
 
-def _format_to_display(fmt: str) -> str:
-    """Map format code to display name."""
-    return {"jsonl": "JSONL", "json": "JSON", "markdown": "Markdown", "text": "Plain Text"}.get(fmt, fmt)
-
-
 class DetectorRegistry:
     """Manages all CLI detectors and provides unified session scanning."""
 
@@ -249,26 +244,6 @@ class DetectorRegistry:
 
         if len(clis) == original_count:
             return False  # Not found
-
-        if save_custom_clis(clis):
-            self._load_custom_clis()
-            return True
-        return False
-
-    def update_custom_cli(self, name: str, **updates) -> bool:
-        """Update a custom CLI's properties."""
-        clis = load_custom_clis()
-        found = False
-
-        for cli in clis:
-            if cli.get("name", "").lower() == name.lower():
-                for key, value in updates.items():
-                    cli[key] = value
-                found = True
-                break
-
-        if not found:
-            return False
 
         if save_custom_clis(clis):
             self._load_custom_clis()

@@ -31,10 +31,7 @@
   --font-ui:   -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
 
-  /* CLI badge colors */
-  --claude-code: #FF7820;
-  --codex:       #4A90D9;
-  --gemini-cli:  #D94444;
+  /* CLI badge colors (used in .cli-badge classes below) */
 }
 
 html, body {
@@ -144,10 +141,6 @@ html, body {
 .cli-badge.custom { background: rgba(136,136,136,0.15); color: #aaa; border: 1px solid rgba(136,136,136,0.3); }
 
 /* Session preview */
-.session-preview-pane {
-  flex: 1; overflow-y: auto; background: var(--bg-surface);
-  border: 1px solid var(--border); border-radius: var(--radius);
-}
 .preview-header {
   padding: 12px 16px; border-bottom: 1px solid var(--border);
   font-weight: 700; font-size: 14px;
