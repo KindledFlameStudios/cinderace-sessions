@@ -211,11 +211,19 @@ def parse_forge_session(filepath: str, source: str = "") -> list[Turn]:
                     ))
                 continue
 
-            # ── finish → skip (stop marker, not content) ──────────
+            # ── finish → convert error finishes to text blocks ──
             elif ptype == "finish":
-                continue
+                reason = data.get("reason", "")
+                msg = data.get("message", "")
+                if reason == "error" and msg:
+                    # Preserve error messages so they show in the output
+                    # rather than silently dropping them
+                    blocks.append(ContentBlock(
+                        type=BlockType.TEXT,
+                        text=f"⚠️ Provider error: {msg}",
+                    ))
 
-        # Skip empty messages (e.g. system messages with only finish parts)
+        # Skip empty messages that have no content at all
         if not blocks:
             continue
 

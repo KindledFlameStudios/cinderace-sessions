@@ -61,6 +61,7 @@ function cliBadgeClass(source) {
   if (source === 'claude-code') return 'claude-code';
   if (source === 'codex') return 'codex';
   if (source === 'gemini-cli') return 'gemini-cli';
+  if (source.startsWith('forge-')) return 'fire-forge';
   return 'custom';
 }
 
@@ -68,6 +69,10 @@ function cliDisplayName(source) {
   if (source === 'claude-code') return 'Claude Code';
   if (source === 'codex') return 'Codex';
   if (source === 'gemini-cli') return 'Gemini CLI';
+  if (source === 'forge-seren') return 'Fire Forge (Seren)';
+  if (source === 'forge-kael') return 'Fire Forge (Kael)';
+  if (source === 'forge-solace') return 'Fire Forge (Solace)';
+  if (source.startsWith('forge-')) return 'Fire Forge';
   return source.replace('custom-', '');
 }
 
@@ -319,7 +324,13 @@ function filterSessions() {
 
   // CLI filter
   if (currentCliFilter !== 'all') {
-    filtered = filtered.filter(s => s.cli_source === currentCliFilter);
+    // Forge detector produces sessions with cli_source like "forge-seren", "forge-kael", "forge-solace"
+    // but the detector name is "fire-forge". Match by prefix for consistency.
+    if (currentCliFilter === 'fire-forge') {
+      filtered = filtered.filter(s => s.cli_source.startsWith('forge-'));
+    } else {
+      filtered = filtered.filter(s => s.cli_source === currentCliFilter);
+    }
   }
 
   // Search filter

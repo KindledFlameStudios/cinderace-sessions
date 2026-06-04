@@ -138,6 +138,7 @@ html, body {
 .cli-badge.claude-code { background: rgba(255,120,32,0.15); color: #FF7820; border: 1px solid rgba(255,120,32,0.3); }
 .cli-badge.codex { background: rgba(74,144,217,0.15); color: #4A90D9; border: 1px solid rgba(74,144,217,0.3); }
 .cli-badge.gemini-cli { background: rgba(217,68,68,0.15); color: #D94444; border: 1px solid rgba(217,68,68,0.3); }
+.cli-badge.fire-forge { background: rgba(232,93,44,0.15); color: #E85D2C; border: 1px solid rgba(232,93,44,0.3); }
 .cli-badge.custom { background: rgba(136,136,136,0.15); color: #aaa; border: 1px solid rgba(136,136,136,0.3); }
 
 /* Session preview */
