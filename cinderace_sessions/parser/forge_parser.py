@@ -211,11 +211,21 @@ def parse_forge_session(filepath: str, source: str = "") -> list[Turn]:
                     ))
                 continue
 
-            # ── finish → skip (stop marker, not content) ──────────
+            # ── finish → preserve error messages, skip normal stops ──
             elif ptype == "finish":
-                continue
+                reason = data.get("reason", "")
+                msg = data.get("message", "")
+                if reason == "error" and msg:
+                    # Error-only messages were being silently dropped,
+                    # causing confusing consecutive user turns in the export.
+                    # Preserve them so the conversation flow makes sense.
+                    blocks.append(ContentBlock(
+                        type=BlockType.TEXT,
+                        text=f"⚠️ Provider error: {msg}",
+                    ))
 
-        # Skip empty messages (e.g. system messages with only finish parts)
+        # Skip messages that have no content at all
+        # (e.g. system messages with only a finish/stop part)
         if not blocks:
             continue
 
