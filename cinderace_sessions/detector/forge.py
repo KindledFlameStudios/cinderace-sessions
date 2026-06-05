@@ -88,7 +88,7 @@ class ForgeDetector(CLIDetector):
                     file_size=0,  # Single database, not per-file
                     mtime=float(created_sec) if created_sec else 0.0,
                     entrypoint="forge",
-                    project=f"Forge · {identity.capitalize()}",
+                    project=identity,
                 ))
 
             conn.close()
