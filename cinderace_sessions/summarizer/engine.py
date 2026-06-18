@@ -10,10 +10,55 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_endpoint_url(url: str) -> None:
+    """Ensure custom LLM endpoints use HTTPS (or are local/loopback).
+
+    Prevents API keys from being sent over plain HTTP to non-local hosts.
+    Localhost and loopback addresses are allowed for local proxies and
+    self-hosted models (Ollama, vLLM, etc.).
+
+    Raises:
+        ValueError: If the URL uses http:// for a non-local host.
+    """
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    host = parsed.hostname or ""
+
+    if scheme == "https":
+        return
+    if scheme == "http":
+        # Allow localhost and loopback for local models/proxies
+        if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return
+        # Allow local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+        parts = host.split(".")
+        if len(parts) == 4 and parts[0].isdigit():
+            try:
+                octet0 = int(parts[0])
+                if octet0 in (10, 192, 172):
+                    if octet0 == 192 and parts[1] == "168":
+                        return
+                    if octet0 == 10:
+                        return
+                    if octet0 == 172 and parts[1].isdigit():
+                        octet1 = int(parts[1])
+                        if 16 <= octet1 <= 31:
+                            return
+            except ValueError:
+                pass
+        raise ValueError(
+            f"Refusing to send API key over plain HTTP to non-local host '{host}'. "
+            "Use HTTPS, or connect to a localhost/loopback endpoint."
+        )
+    if scheme == "":
+        raise ValueError(f"URL missing scheme (use https:// or http://localhost:...): {url}")
 
 # ── Common Types ────────────────────────────────────────────────────
 
@@ -72,6 +117,8 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(self, api_key: str, model: str = "", custom_url: str = ""):
         super().__init__(api_key, model or self.DEFAULT_MODEL)
+        if custom_url:
+            _validate_endpoint_url(custom_url)
         self._base_url = (custom_url.rstrip("/") if custom_url
                           else self.API_URL)
 
@@ -328,9 +375,11 @@ def get_provider(provider_name: str, api_key: str, model: str = "",
     if provider_name == "custom":
         if not custom_url:
             raise ValueError("Custom provider requires a URL endpoint")
+        _validate_endpoint_url(custom_url)
         return OpenAIProvider(api_key=api_key, model=model, custom_url=custom_url)
 
     if provider_name == "openai" and custom_url:
+        _validate_endpoint_url(custom_url)
         return OpenAIProvider(api_key=api_key, model=model, custom_url=custom_url)
 
     return cls(api_key=api_key, model=model)

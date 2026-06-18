@@ -45,7 +45,7 @@ def _claude_assistant_line(text, timestamp="2026-01-15T10:01:00Z"):
     })
 
 
-def _codex_user_line(text, cwd="/home/seren", timestamp="2026-01-15T10:00:00Z"):
+def _codex_user_line(text, cwd="/home/user", timestamp="2026-01-15T10:00:00Z"):
     """Build a Codex response_item with user content."""
     return json.dumps({
         "type": "response_item",
@@ -57,7 +57,7 @@ def _codex_user_line(text, cwd="/home/seren", timestamp="2026-01-15T10:00:00Z"):
     })
 
 
-def _codex_meta_line(session_id="test-123", cwd="/home/seren/projects/myapp"):
+def _codex_meta_line(session_id="test-123", cwd="/home/user/projects/myapp"):
     """Build a Codex session_meta record."""
     return json.dumps({
         "type": "session_meta",
@@ -141,12 +141,12 @@ class TestReadPreview:
     def test_codex_skips_environment_context(self, tmp_jsonl):
         lines = [
             _codex_meta_line(),
-            _codex_user_line("<environment_context>\n  <cwd>/home/seren</cwd>\n  <shell>bash</shell>\n</environment_context>"),
+            _codex_user_line("<environment_context>\n  <cwd>/home/user</cwd>\n  <shell>bash</shell>\n</environment_context>"),
             _codex_user_line("What's the status of the project?"),
         ]
         path = tmp_jsonl(lines)
         preview = read_preview(path)
-        assert "/home/seren" not in preview
+        assert "/home/user" not in preview
         assert "bash" not in preview
         assert "status" in preview.lower() or "project" in preview.lower()
 

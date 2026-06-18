@@ -16,7 +16,7 @@ Same philosophy: preserve everything, extract thinking, make it readable.
 ## How to Run
 
 ```bash
-cd "/home/seren/CinderACE - Sessions"
+cd ~/CinderACE\ -\ Sessions
 
 # Install as editable package
 pip install -e .
@@ -105,7 +105,7 @@ cinderace_sessions/
 ## Testing
 
 ```bash
-cd "/home/seren/CinderACE - Sessions"
+cd ~/CinderACE\ -\ Sessions
 python -m pytest tests/ -v
 ```
 

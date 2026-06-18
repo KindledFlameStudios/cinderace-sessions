@@ -20,8 +20,8 @@ from cinderace_sessions.parser.base import (
 def format_tool_detail(block: ContentBlock) -> str:
     """Format a tool_use block into a readable one-liner.
 
-    e.g. "Read: /home/seren/src/app.ts"
-         "Edit: /home/seren/src/app.ts"
+    e.g. "Read: ~/src/app.ts"
+         "Edit: ~/src/app.ts"
          "Bash: npm run build"
     """
     name = block.name or "unknown"

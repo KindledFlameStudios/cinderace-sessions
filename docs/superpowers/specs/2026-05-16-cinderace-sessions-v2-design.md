@@ -215,7 +215,7 @@ Config-driven with GUI overlay. Follows the ember-memory pattern (GUI for common
   "custom_clis": [
     {
       "name": "Fire Forge",
-      "directory": "/home/seren/.forge/sessions",
+      "directory": "~/.forge/sessions",
       "format": "jsonl",
       "color": "#FF7820",
       "enabled": true

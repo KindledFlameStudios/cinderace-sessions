@@ -708,7 +708,11 @@ def run_gui():
     webview.settings['OPEN_DEVTOOLS_IN_DEBUG'] = False
 
     api._window = window
-    webview.start(debug=True)
+    # Debug mode is opt-in via env var. Production runs with debug=False.
+    # Note: WebView2 (Windows) ties right-click context menus to debug=True.
+    # If context menus are needed, set CINDERACE_SESSIONS_DEBUG=1.
+    debug_mode = os.environ.get("CINDERACE_SESSIONS_DEBUG", "").lower() in ("1", "true", "yes")
+    webview.start(debug=debug_mode)
 
 
 def main():

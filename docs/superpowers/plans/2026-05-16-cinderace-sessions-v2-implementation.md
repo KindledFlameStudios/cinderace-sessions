@@ -474,10 +474,10 @@ Phases 2 and 3 can be partially parallelized — parsers and renderers don't dep
 
 ## Key References
 
-- **Existing parser logic:** `/home/seren/CinderACE - Sessions/src/parser.ts` (TypeScript, port to Python)
-- **Existing renderer logic:** `/home/seren/CinderACE - Sessions/src/renderer.ts`, `htmlRenderer.ts` (TypeScript, port to Python)
-- **ember-memory controller pattern:** `/home/seren/ember-memory/ember_memory/controller_app.py`
-- **ember-memory tray pattern:** `/home/seren/ember-memory/controller/tray.py`
-- **ember-memory integration API:** `/home/seren/ember-memory/ember_memory/ingest.py`, `server.py`, `core/backends/`, `core/embeddings/`
+- **Existing parser logic:** `~/CinderACE - Sessions/src/parser.ts` (TypeScript, port to Python)
+- **Existing renderer logic:** `~/CinderACE - Sessions/src/renderer.ts`, `htmlRenderer.ts` (TypeScript, port to Python)
+- **ember-memory controller pattern:** `~/ember-memory/ember_memory/controller_app.py`
+- **ember-memory tray pattern:** `~/ember-memory/controller/tray.py`
+- **ember-memory integration API:** `~/ember-memory/ember_memory/ingest.py`, `server.py`, `core/backends/`, `core/embeddings/`
 - **Codex sessions location:** `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
 - **Gemini CLI sessions location:** `~/.gemini/tmp/<project_hash>/logs.json`
