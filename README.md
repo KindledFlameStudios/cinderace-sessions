@@ -1,16 +1,53 @@
 # CinderACE Sessions
 
-**Export Claude Code sessions as clean, readable documents — markdown, HTML, JSON, JSONL, or ZIP.**
+**Discover, browse, export, and preserve AI CLI conversations from any tool, in any format.**
 
-CinderACE Sessions brings the [CinderACE](https://kindledflamestudios.com/cinderace) conversation preservation philosophy to Claude Code. Your conversations deserve to be preserved with fidelity — not lost to context window limits.
+AI coding tools are incredible at helping us build.
+They're terrible at helping us remember.
 
-## The Problem
+Sessions get compressed. Context windows move on. Old projects disappear into hidden folders. Six months later, you remember solving a problem, but not where, when, or how.
 
-Claude Code stores sessions as raw JSONL files. When your context window fills up and compresses, older messages disappear from the UI — but the data is still there on disk, buried in unreadable JSON. CinderACE Sessions extracts it all and gives you clean, human-readable exports.
+CinderACE Sessions was built because important conversations deserve better than being trapped inside a CLI.
 
-## Features
+It discovers AI sessions across your machine, presents them in a unified desktop interface, and exports them as clean, readable documents you can actually use.
 
-**5 Export Formats** — each produces both clean and full variants:
+Whether you're revisiting a breakthrough, preserving research, reviewing technical decisions, creating training datasets, or simply trying to remember how you solved a problem three months ago, CinderACE Sessions helps you keep what matters.
+
+Built by developers who needed it themselves.
+
+Because context windows forget.
+Your work shouldn't.
+
+## Why Sessions Matter
+
+Most AI CLI tools focus on the current conversation.
+CinderACE Sessions focuses on the complete history.
+
+Even after context compression, summarization, or session pruning, the underlying session files often still contain the full journey. CinderACE Sessions discovers those files, organizes them, and makes them accessible again.
+
+The result isn't just a conversation viewer.
+It's a searchable archive of your work, decisions, and discoveries.
+
+A place where ideas, experiments, debugging sessions, architectural decisions, and breakthroughs remain available long after the context window has moved on.
+
+## Sources
+
+Sessions don't live in one place. They scatter across every CLI tool you use.
+
+| Source | Default Location |
+|--------|------------------|
+| **Claude Code** | `~/.claude/projects/` |
+| **Codex** | `~/.codex/sessions/` (respects `CODEX_HOME`) |
+| **Fire Forge** | `~/.forge/` |
+| **Gemini CLI** | `~/.gemini/tmp/` (respects `GEMINI_CLI_HOME`) |
+
+And if you use something we haven't thought of, you can register it. Point CinderACE Sessions at any directory containing JSONL, JSON, Markdown, or text session files — it scans, discovers, and includes those sessions alongside the built-in sources.
+
+## Export Formats
+
+Exports aren't just for reading. They're for using.
+
+Every format produces two variants: **Clean** (conversation + thinking blocks, readable and focused) and **Full** (everything clean has, plus detailed tool usage — file reads, edits, bash commands, searches).
 
 | Format | Clean | Full |
 |--------|-------|------|
@@ -20,16 +57,24 @@ Claude Code stores sessions as raw JSONL files. When your context window fills u
 | **JSONL** | One turn per line | + thinking + tool data |
 | **ZIP** | All of the above bundled together |
 
-**3 HTML Themes:**
-- **Ember** — the signature CinderACE look (warm oranges and golds on dark)
-- **Dark** — cool blues and grays
-- **Light** — clean white with blue accents
+Use JSONL for training datasets and fine-tuning. Use HTML when you need to share with someone who shouldn't need a terminal. Use ZIP when you need everything — archives, backups, documentation sets.
 
-**Custom Naming** — name each export with a prompt, or press Enter for the auto-detected session slug.
+## Features
 
-**Thinking Block Extraction** — Claude's internal reasoning captured and presented in collapsible sections.
+**Find everything.** Auto-discovers sessions from Claude Code, Codex, Fire Forge, and Gemini CLI. And if you use something we haven't thought of, point it at a directory and it just works.
 
-**Tool Usage Details** — see exactly what files were read, edited, what commands were run:
+**Browse in one window.** Desktop GUI with system tray. Filter by source, date range, or search across titles and previews. No terminal required.
+
+**Export like you mean it.** Markdown, HTML, JSON, JSONL, or ZIP. Each in clean and full variants. Use JSONL for training datasets. Use HTML for sharing. Use ZIP when you need everything.
+
+**Three HTML themes.** Ember (warm oranges on dark), Dark (cool blues), Light (clean white). Pick one. Or don't — it remembers.
+
+**Summarize with your own keys.** OpenAI, Anthropic, OpenRouter, or a custom endpoint. Your API keys stay on your machine. The summarizer is a tool, not a service.
+
+**Thinking isn't disposable.** Internal reasoning blocks are captured and presented in collapsible sections, not stripped out.
+
+**Tool usage is part of the story.** See exactly what was read, edited, and run:
+
 ```
 > **Read** `/src/components/App.tsx`
 > **Edit** `/src/utils/helpers.ts`
@@ -37,61 +82,40 @@ Claude Code stores sessions as raw JSONL files. When your context window fills u
 > **Grep** `useState` in *.tsx
 ```
 
-## Usage
+## Installation
 
-1. Click the **flame icon** in the status bar (or run `CinderACE Sessions: Export Current Session` from the command palette)
-2. **Name your export** — type a custom name or press Enter for the default
-3. **Pick your formats** — select one or more (multi-select)
-4. **Choose your output directory** (remembered after first use)
-5. Done — your exports are saved
+```bash
+git clone https://github.com/KindledFlameStudios/cinderace-sessions.git
+cd cinderace-sessions
+pip install .
 
-### Commands
+# Launch the app
+cinderace-sessions
+```
+
+**Requirements:** Python 3.10+, a supported CLI tool with existing sessions.
+
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `CinderACE Sessions: Export Current Session` | Export the active session (also: click the flame) |
-| `CinderACE Sessions: Export Recent Sessions` | Batch export the last N sessions |
-| `CinderACE Sessions: Select Output Directory` | Change where exports are saved |
-| `CinderACE Sessions: Open Output Directory` | Open your export folder |
-
-## Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `cinderaceSessions.htmlTheme` | `ember` | HTML theme: `ember`, `dark`, or `light` |
-| `cinderaceSessions.includeThinking` | `true` | Include thinking/reasoning blocks |
-| `cinderaceSessions.includeTools` | `true` | Include tool usage details |
-| `cinderaceSessions.userLabel` | `User` | Display label for user messages |
-| `cinderaceSessions.assistantLabel` | `Assistant` | Display label for assistant messages |
-| `cinderaceSessions.userEmoji` | *(empty)* | Emoji prefix for user messages |
-| `cinderaceSessions.assistantEmoji` | *(empty)* | Emoji prefix for assistant messages |
-| `cinderaceSessions.outputDirectory` | *(prompted)* | Where to save exports |
-| `cinderaceSessions.transcriptsDirectory` | *(auto-detect)* | Override Claude Code transcripts location |
-
-## How It Works
-
-Claude Code stores every conversation as a JSONL file at `~/.claude/projects/{workspace-slug}/`. Each line is a JSON object containing the message role, content blocks (text, thinking, tool usage), timestamps, and metadata.
-
-CinderACE Sessions reads these files, parses the structured content, and renders them into your chosen formats. The JSONL files are **append-only** — nothing is ever deleted, even after context compression. This means you can export a complete conversation at any time, regardless of what the UI shows.
-
-**Clean vs Full exports:**
-- **Clean** — conversation text + thinking blocks. Readable, focused, no noise.
-- **Full** — everything clean has, plus detailed tool usage (file reads, edits, bash commands, searches). Great for reviewing past technical work.
+| `cinderace-sessions` | Launch the app and return immediately |
+| `cinderace-sessions controller` | Launch the controller in the foreground |
+| `cinderace-sessions tray` | Launch the system tray |
 
 ## Part of the CinderACE Family
 
-CinderACE Sessions is the editor companion to [CinderACE](https://kindledflamestudios.com/cinderace), the universal AI chat exporter for Chrome and Edge. Together they cover every AI conversation environment:
-
-- **CinderACE** (browser) — Claude.ai, ChatGPT, Gemini, Grok, DeepSeek, Perplexity, and 8 more platforms
-- **CinderACE Sessions** (editor) — Claude Code sessions in VS Code / VSCodium
-
 Same philosophy: **preserve everything, extract thinking, make it readable.**
 
-## Requirements
+- **CinderACE** (browser) — Claude.ai, ChatGPT, Gemini, Grok, DeepSeek, Perplexity, and 8 more platforms
+- **CinderACE Sessions** (desktop) — Claude Code, Codex, Fire Forge, Gemini CLI, and any custom CLI tool
 
-- VS Code 1.85+ or VSCodium
-- Claude Code CLI (conversations must exist at `~/.claude/projects/`)
+Designed to pair with [Ember Memory](https://kindledflamestudios.com) for building clean, organized conversation collections.
 
 ## License
 
 MIT
+
+---
+
+CinderACE Sessions exists because context windows are temporary, but the work you do inside them doesn't have to be.
