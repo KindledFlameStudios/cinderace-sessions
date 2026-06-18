@@ -104,10 +104,16 @@ class CustomCLIDetector(CLIDetector):
                         entrypoint="unknown",
                         project=self._display_name,
                     ))
-                except OSError:
+                except PermissionError:
+                    logger.warning("Permission denied accessing %s", session_file)
                     continue
-        except OSError:
-            pass
+                except OSError as e:
+                    logger.debug("Skipping %s: %s", session_file, e)
+                    continue
+        except PermissionError:
+            logger.warning("Permission denied scanning directory %s", dir_path)
+        except OSError as e:
+            logger.warning("Error scanning custom CLI directory %s: %s", dir_path, e)
 
         return sessions
 
@@ -194,8 +200,11 @@ class DetectorRegistry:
                     continue
                 sessions = detector.find_sessions()
                 all_sessions.extend(sessions)
-            except Exception:
-                logger.debug("Skipping %s due to error", detector, exc_info=True)
+            except PermissionError as e:
+                logger.warning("Permission error scanning %s: %s", detector.display_name, e)
+                continue
+            except Exception as e:
+                logger.warning("Error scanning %s: %s: %s", detector.display_name, type(e).__name__, e)
                 continue
 
         for detector in self._custom:
@@ -207,8 +216,11 @@ class DetectorRegistry:
                     continue
                 sessions = detector.find_sessions()
                 all_sessions.extend(sessions)
-            except Exception:
-                logger.debug("Skipping custom %s due to error", detector, exc_info=True)
+            except PermissionError as e:
+                logger.warning("Permission error scanning custom CLI %s: %s", detector.display_name, e)
+                continue
+            except Exception as e:
+                logger.warning("Error scanning custom CLI %s: %s: %s", detector.display_name, type(e).__name__, e)
                 continue
 
         # Sort by mtime descending (newest first)

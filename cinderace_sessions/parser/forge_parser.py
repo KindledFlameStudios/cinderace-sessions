@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -101,26 +102,22 @@ def parse_forge_session(filepath: str, source: str = "") -> list[Turn]:
     turns: list[Turn] = []
 
     try:
-        conn = sqlite3.connect(str(db_path))
-        # Handle emoji and other non-ASCII in message content
-        conn.text_factory = lambda b: b.decode("utf-8", errors="replace")
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        import sqlite3
+        with closing(sqlite3.connect(str(db_path))) as conn:
+            # Handle emoji and other non-ASCII in message content
+            conn.text_factory = lambda b: b.decode("utf-8", errors="replace")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT id, role, parts, created_at FROM messages "
-            "WHERE session_id = ? ORDER BY created_at ASC",
-            (session_id,),
-        )
-        rows = cursor.fetchall()
+            cursor.execute(
+                "SELECT id, role, parts, created_at FROM messages "
+                "WHERE session_id = ? ORDER BY created_at ASC",
+                (session_id,),
+            )
+            rows = cursor.fetchall()
     except Exception:
         logger.error("Forge parser: failed to query forge.db %r", db_path, exc_info=True)
         return []
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
 
     for row in rows:
         msg_id = row["id"]
@@ -317,24 +314,20 @@ def forge_extract_meta(filepath: str, source: str = "") -> SessionMeta:
     meta.session_id = session_id
 
     try:
-        conn = sqlite3.connect(str(db_path))
-        conn.text_factory = lambda b: b.decode("utf-8", errors="replace")
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        import sqlite3
+        with closing(sqlite3.connect(str(db_path))) as conn:
+            conn.text_factory = lambda b: b.decode("utf-8", errors="replace")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-        cursor.execute(
-            "SELECT id, title, identity, created_at FROM sessions WHERE id = ?",
-            (session_id,),
-        )
-        row = cursor.fetchone()
+            cursor.execute(
+                "SELECT id, title, identity, created_at FROM sessions WHERE id = ?",
+                (session_id,),
+            )
+            row = cursor.fetchone()
     except Exception:
         logger.error("Forge meta: failed to query session %r", session_id, exc_info=True)
         return meta
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
 
     if not row:
         return meta

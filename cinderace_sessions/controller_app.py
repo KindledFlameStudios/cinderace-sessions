@@ -295,11 +295,16 @@ class SessionsAPI:
 
         return None
 
-    def ingest_session(self, filepath: str, collection: str = "general", tags: str = "") -> bool:
-        """Ingest a session into ember-memory via HTTP MCP server."""
+    def ingest_session(self, filepath: str, collection: str = "general", tags: str = "") -> dict:
+        """Ingest a session into ember-memory via HTTP MCP server.
+
+        Returns a dict with:
+            success: bool — whether the ingest completed
+            error: str — human-readable error message if success is False
+        """
         if not self._validate_filepath(filepath):
             logger.error("ingest_session: unvalidated filepath rejected")
-            return False
+            return {"success": False, "error": "Invalid filepath"}
 
         source = "unknown"
         for s in self._sessions_cache:
@@ -309,7 +314,7 @@ class SessionsAPI:
 
         turns, meta = self._parse_session(filepath, source)
         if turns is None:
-            return False
+            return {"success": False, "error": "Failed to parse session"}
 
         config = load_config()
         options = RenderOptions(
@@ -332,20 +337,39 @@ class SessionsAPI:
             tags_str = tags or f"cli:{source},project:{meta.slug or 'unknown'},date:{meta.first_date}"
             source_str = f"cinderace-sessions:{source}"
 
+            # Warn if content is being truncated
+            ingest_content = content[:8000]
+            if len(content) > 8000:
+                logger.info("ingest_session: truncating content from %d to 8000 chars for %s",
+                            len(content), filepath)
+
             resp = requests.post(
                 f"{ember_url}/tools/memory_store",
                 json={
-                    "content": content[:8000],
+                    "content": ingest_content,
                     "collection": collection,
                     "tags": tags_str,
                     "source": source_str,
                 },
                 timeout=30,
             )
-            return resp.status_code == 200
+            if resp.status_code == 200:
+                return {"success": True, "error": ""}
+            else:
+                return {
+                    "success": False,
+                    "error": f"ember-memory returned HTTP {resp.status_code}: {resp.text[:200]}",
+                }
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "error": f"Cannot reach ember-memory at {ember_url}. Is it running?",
+            }
+        except requests.exceptions.Timeout:
+            return {"success": False, "error": "ember-memory request timed out (30s)"}
         except Exception as e:
             logger.error("ember-memory ingest failed for %s: %s", filepath, e, exc_info=True)
-            return False
+            return {"success": False, "error": f"Unexpected error: {e}"}
 
     # ── Custom CLIs ─────────────────────────────────────────────────
 
@@ -633,7 +657,11 @@ class SessionsAPI:
     # ── Internal Helpers ─────────────────────────────────────────────
 
     def _parse_session(self, filepath: str, source: str):
-        """Parse a session file based on its source CLI and file extension."""
+        """Parse a session file based on its source CLI and file extension.
+
+        Returns (turns, meta) on success, (None, None) on failure.
+        On failure, logs the specific error type for debugging.
+        """
         try:
             filepath_lower = filepath.lower()
 
@@ -655,11 +683,21 @@ class SessionsAPI:
                 meta = extract_session_meta(filepath)
 
             if not turns:
+                logger.warning("No turns parsed from %s (source: %s) — file may be empty or unsupported", filepath, source)
                 return None, None
             return turns, meta
 
+        except PermissionError as e:
+            logger.error("Permission denied reading %s: %s", filepath, e)
+            return None, None
+        except FileNotFoundError as e:
+            logger.error("File not found: %s: %s", filepath, e)
+            return None, None
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.error("Parse error in %s (source: %s): %s: %s", filepath, source, type(e).__name__, e)
+            return None, None
         except Exception as e:
-            logger.error("Parse session failed for %s (%s): %s", filepath, source, e, exc_info=True)
+            logger.error("Unexpected parse failure for %s (source: %s): %s: %s", filepath, source, type(e).__name__, e, exc_info=True)
             return None, None
 
     @staticmethod

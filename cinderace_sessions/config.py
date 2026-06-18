@@ -6,9 +6,12 @@ Resolution order: env var > ~/.cinderace-sessions/settings.json > defaults
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # ── defaults ──────────────────────────────────────────────────────────
 
@@ -50,8 +53,10 @@ def load_config() -> dict[str, Any]:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 file_config = json.load(f)
                 config.update(file_config)
-        except (json.JSONDecodeError, OSError):
-            pass
+        except json.JSONDecodeError as e:
+            logger.warning("settings.json is corrupt (ignoring file): %s", e)
+        except OSError as e:
+            logger.warning("Cannot read settings.json (ignoring file): %s", e)
 
     # Layer 2: environment variable overrides (CINDERACE_SESSIONS_* prefix)
     env_map = {
@@ -103,7 +108,11 @@ def load_custom_clis() -> list[dict[str, Any]]:
         with open(CUSTOM_CLIS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             return data.get("custom_clis", [])
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError as e:
+        logger.warning("custom_clis.json is corrupt (ignoring file): %s", e)
+        return []
+    except OSError as e:
+        logger.warning("Cannot read custom_clis.json (ignoring file): %s", e)
         return []
 
 

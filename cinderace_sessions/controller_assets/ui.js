@@ -496,10 +496,11 @@ async function ingestSession() {
   if (!currentSession) { toast('Select a session first', 'error'); return; }
   const collection = $('#emberCollection')?.value || 'general';
   const result = await callApi('ingest_session', currentSession.filepath, collection);
-  if (result) {
+  if (result && result.success) {
     toast('Ingested into ember-memory', 'success');
   } else {
-    toast('Ingest failed — is ember-memory running?', 'error');
+    const errMsg = (result && result.error) ? result.error : 'Ingest failed';
+    toast(errMsg, 'error');
   }
 }
 
