@@ -1,8 +1,6 @@
 """Tests for the Gemini parser — logs.json and chat formats."""
 
 import json
-import os
-import tempfile
 
 import pytest
 

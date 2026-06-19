@@ -1,9 +1,6 @@
-# CinderACE - Sessions Fort
-# VS Code bridge protection.
+# CinderACE - Sessions
+# Python project ignores.
 
-node_modules/
-out/
-*.vsix
 *.map
 .vscode/
 deploy.sh
@@ -20,3 +17,15 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+venv/
+.venv/
+
+# Legacy VS Code extension build artifacts
+node_modules/
+*.vsix

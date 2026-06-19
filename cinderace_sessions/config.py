@@ -32,6 +32,7 @@ DEFAULTS: dict[str, Any] = {
     "summarizer_custom_url": "",
     "default_ember_collection": "general",
     "ember_memory_url": "http://localhost:2214",
+    "ollama_url": "http://localhost:11434",
 }
 
 CONFIG_DIR = Path.home() / ".cinderace-sessions"

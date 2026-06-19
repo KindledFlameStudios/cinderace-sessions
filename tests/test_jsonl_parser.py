@@ -1,8 +1,6 @@
 """Tests for the JSONL parser — Claude Code and Codex formats."""
 
 import json
-import os
-import tempfile
 
 import pytest
 

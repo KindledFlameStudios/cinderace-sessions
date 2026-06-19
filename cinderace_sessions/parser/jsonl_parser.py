@@ -9,7 +9,6 @@ Ported from the TypeScript parser.ts with the same logic and edge cases.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 from cinderace_sessions.parser.base import (

@@ -35,7 +35,7 @@ cinderace-sessions-controller = "cinderace_sessions.__main__:launch_controller"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["cinderace_sessions*", "controller*"]
+include = ["cinderace_sessions*"]
 
 [tool.setuptools.package-data]
 "cinderace_sessions.controller_assets" = ["ui.html", "ui.css", "ui.js"]

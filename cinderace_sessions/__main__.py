@@ -4,7 +4,6 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime
 
 
 def _configure_logging():
@@ -32,6 +31,7 @@ def _open_launch_log(name: str):
     log_dir = os.path.join(os.path.expanduser("~"), ".cinderace-sessions")
     os.makedirs(log_dir, exist_ok=True)
     path = os.path.join(log_dir, name)
+    from datetime import datetime
     handle = open(path, "a", encoding="utf-8")
     handle.write(f"\n--- {datetime.now().isoformat(timespec='seconds')} ---\n")
     handle.flush()
@@ -68,15 +68,7 @@ def launch_app_detached():
 def launch_controller():
     """Launch the desktop controller in the foreground."""
     from cinderace_sessions.controller_app import main as controller_main
-
     controller_main()
-
-
-def launch_tray():
-    """Launch the system tray."""
-    from controller.tray import main as tray_main
-
-    tray_main()
 
 
 def main():
@@ -92,15 +84,8 @@ def main():
     elif cmd in {"controller", "ui"}:
         launch_controller()
 
-    elif cmd == "tray":
-        launch_tray()
-
     elif cmd == "setup":
         launch_controller()
-
-    elif cmd in {"install-desktop", "uninstall-desktop", "desktop-status"}:
-        # Will be implemented in Phase 7
-        print(f"Desktop integration not yet implemented. Command: {cmd}")
 
     else:
         print("CinderACE Sessions v2.0")
@@ -108,10 +93,7 @@ def main():
         print("Commands:")
         print("  cinderace-sessions               Launch the app and return immediately")
         print("  cinderace-sessions controller     Launch the controller in the foreground")
-        print("  cinderace-sessions tray           Launch the system tray")
         print("  cinderace-sessions setup          Launch the controller in the foreground")
-        print("  cinderace-sessions install-desktop Create app launcher / Start Menu shortcut")
-        print("  cinderace-sessions uninstall-desktop Remove app launcher / Start Menu shortcut")
         print()
         print("Quick start:")
         print("  cinderace-sessions                Open the app")

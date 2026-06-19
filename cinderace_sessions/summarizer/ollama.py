@@ -11,9 +11,12 @@ import requests
 
 from .engine import LLMProvider, SummarizeResult
 
+from cinderace_sessions.config import load_config
+
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = "http://localhost:11434"
+_config = load_config()
+OLLAMA_URL = _config.get("ollama_url", "http://localhost:11434")
 DEFAULT_MODEL = "llama3.2"
 
 
@@ -24,7 +27,7 @@ class OllamaProvider(LLMProvider):
         # Ollama doesn't need an API key
         super().__init__(api_key="", model=model or DEFAULT_MODEL)
         self._base_url = (base_url.rstrip("/") if base_url
-                          else OLLAMA_BASE_URL)
+                          else OLLAMA_URL)
 
     def summarize(self, content: str, prompt_template: str,
                   max_tokens: int = 4096) -> SummarizeResult:
@@ -101,12 +104,12 @@ class OllamaProvider(LLMProvider):
             return []
 
 
-def list_models(base_url: str = "") -> list[str] | None:
+def list_models(url: str = "") -> list[str] | None:
     """List available Ollama model names (standalone, no instance needed).
 
     Returns None if Ollama is not running, empty list if running but no models.
     """
-    url = (base_url.rstrip("/") if base_url else OLLAMA_BASE_URL)
+    url = (url.rstrip("/") if url else OLLAMA_URL)
     try:
         resp = requests.get(f"{url}/api/tags", timeout=5)
         if resp.status_code != 200:
@@ -119,9 +122,9 @@ def list_models(base_url: str = "") -> list[str] | None:
         return None
 
 
-def is_ollama_running(base_url: str = "") -> bool:
+def is_ollama_running(url: str = "") -> bool:
     """Quick check if Ollama is running at the given URL."""
-    url = (base_url.rstrip("/") if base_url else OLLAMA_BASE_URL)
+    url = (url.rstrip("/") if url else OLLAMA_URL)
     try:
         resp = requests.get(f"{url}/api/tags", timeout=3)
         return resp.status_code == 200
