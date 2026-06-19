@@ -160,7 +160,7 @@ class OpenAIProvider(LLMProvider):
         except requests.exceptions.ConnectionError:
             return SummarizeResult(success=False, error="Connection failed — check URL and network")
         except Exception as e:
-            logger.exception("OpenAI summarize error")
+            logger.error("OpenAI summarize error: %s", e)
             return SummarizeResult(success=False, error=str(e))
 
     def test_connection(self) -> bool:
@@ -238,7 +238,7 @@ class AnthropicProvider(LLMProvider):
         except requests.exceptions.ConnectionError:
             return SummarizeResult(success=False, error="Connection failed — check network")
         except Exception as e:
-            logger.exception("Anthropic summarize error")
+            logger.error("Anthropic summarize error: %s", e)
             return SummarizeResult(success=False, error=str(e))
 
     def test_connection(self) -> bool:
@@ -314,7 +314,7 @@ class OpenRouterProvider(LLMProvider):
         except requests.exceptions.ConnectionError:
             return SummarizeResult(success=False, error="Connection failed — check network")
         except Exception as e:
-            logger.exception("OpenRouter summarize error")
+            logger.error("OpenRouter summarize error: %s", e)
             return SummarizeResult(success=False, error=str(e))
 
     def test_connection(self) -> bool:

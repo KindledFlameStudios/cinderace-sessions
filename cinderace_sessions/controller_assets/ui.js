@@ -286,6 +286,7 @@ async function refreshSessions() {
 }
 
 function startAutoRefresh() {
+  // Auto-refresh session list every 30 seconds to pick up new sessions
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(async () => {
     const sessions = await callApi('get_sessions');

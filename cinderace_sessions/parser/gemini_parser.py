@@ -145,6 +145,7 @@ def _parse_logs_entries(entries: list[dict]) -> list[Turn]:
     - sessionId: session identifier
     """
     turns: list[Turn] = []
+    fallback_uuid = str(uuid4())  # One UUID for all turns that lack a sessionId
 
     for entry in entries:
         if not isinstance(entry, dict):
@@ -169,7 +170,7 @@ def _parse_logs_entries(entries: list[dict]) -> list[Turn]:
             continue
 
         timestamp = entry.get("timestamp", "")
-        turn_uuid = entry.get("sessionId", str(uuid4()))
+        turn_uuid = entry.get("sessionId", fallback_uuid)
 
         turns.append(Turn(
             role=role,

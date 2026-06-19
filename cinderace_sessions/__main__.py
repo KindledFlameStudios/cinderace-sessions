@@ -1,19 +1,20 @@
 """CinderACE Sessions v2 — entry point for all commands."""
 
+import argparse
 import logging
 import os
 import subprocess
 import sys
 
 
-def _configure_logging():
+def _configure_logging(level: int = logging.WARNING):
     """Set up centralized logging for the application."""
     log_dir = os.path.join(os.path.expanduser("~"), ".cinderace-sessions")
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "cinderace-sessions.log")
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[
@@ -72,11 +73,30 @@ def launch_controller():
 
 
 def main():
-    _configure_logging()
+    parser = argparse.ArgumentParser(
+        description="CinderACE Sessions v2 — discover, browse, export, and summarize AI CLI sessions."
+    )
+    parser.add_argument("command", nargs="?", default="launch",
+                        help="Command: launch (default), controller, setup")
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="Enable DEBUG-level logging")
+    parser.add_argument("-q", "--quiet", action="store_true",
+                        help="Suppress logging to ERROR level only")
+    args = parser.parse_args()
+
+    # Resolve log level: --verbose takes precedence over --quiet
+    if args.verbose:
+        level = logging.DEBUG
+    elif args.quiet:
+        level = logging.ERROR
+    else:
+        level = logging.WARNING
+
+    _configure_logging(level=level)
     logger = logging.getLogger(__name__)
     logger.info("CinderACE Sessions v2 starting")
 
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "launch"
+    cmd = args.command
 
     if cmd in {"launch", "app"}:
         launch_app_detached()

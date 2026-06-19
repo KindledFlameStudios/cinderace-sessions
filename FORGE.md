@@ -39,9 +39,11 @@ cinderace_sessions/
     registry.py            # DetectorRegistry — unified scan_all()
     claude_code.py         # ~/.claude/projects/ scanner
     codex.py               # ~/.codex/sessions/ scanner
+    forge.py               # Fire Forge SQLite scanner
     gemini_cli.py          # ~/.gemini/tmp/ scanner
   parser/                  # Parsers for CLI session formats
     base.py                # ExportFormat, SessionMeta, Turn, ContentBlock, etc.
+    forge_parser.py        # Fire Forge session parser
     jsonl_parser.py         # Claude Code + Codex JSONL parser
     gemini_parser.py        # Gemini CLI JSON/JSONL parser
     markdown_parser.py     # Markdown session parser

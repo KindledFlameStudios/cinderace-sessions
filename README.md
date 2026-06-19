@@ -38,7 +38,7 @@ Sessions don't live in one place. They scatter across every CLI tool you use.
 |--------|------------------|
 | **Claude Code** | `~/.claude/projects/` |
 | **Codex** | `~/.codex/sessions/` (respects `CODEX_HOME`) |
-| **Fire Forge** | `~/.forge/` |
+| **Fire Forge** | `~/.local/share/forge/forge.db` |
 | **Gemini CLI** | `~/.gemini/tmp/` (respects `GEMINI_CLI_HOME`) |
 
 And if you use something we haven't thought of, you can register it. Point CinderACE Sessions at any directory containing JSONL, JSON, Markdown, or text session files — it scans, discovers, and includes those sessions alongside the built-in sources.

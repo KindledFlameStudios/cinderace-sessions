@@ -30,8 +30,6 @@
 
   --font-ui:   -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-
-  /* CLI badge colors (used in .cli-badge classes below) */
 }
 
 html, body {

@@ -73,7 +73,7 @@ class OllamaProvider(LLMProvider):
                 error="Cannot connect to Ollama — is it running? (ollama serve)",
             )
         except Exception as e:
-            logger.exception("Ollama summarize error")
+            logger.error("Ollama summarize error: %s", e)
             return SummarizeResult(success=False, error=str(e))
 
     def test_connection(self) -> bool:

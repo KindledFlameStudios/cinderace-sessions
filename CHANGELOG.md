@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.0 — 2026-06-04
+
+### Added
+- **Desktop app** — rewritten as standalone desktop application using pywebview + pystray
+- **4 built-in CLI sources** — Claude Code, Codex, Fire Forge, and Gemini CLI auto-detection
+- **Custom CLI support** — register any directory with JSONL, JSON, Markdown, or text session files
+- **LLM-powered summarizer** — OpenAI, Anthropic, OpenRouter, and Ollama providers with template system
+- **ember-memory integration** — ingest sessions and summaries directly into ember-memory
+- **5 export formats** — Markdown, HTML (3 themes), JSON, JSONL, ZIP with clean/full variants
+- **Desktop GUI** — project-grouped session browser with filtering, search, and preview pane
+- **System tray** — background operation with tray icon
+- **Right-click context menu** — Copy/Cut/Paste/Select All in UI
+
+### Changed
+- Complete rewrite from VS Code extension to desktop application
+- Architecture split into detector, parser, renderer, and summarizer modules
+- Session discovery now scans multiple CLI directories instead of single transcript file
+- Export system unified across all formats with clean/full variants
+
 ## 0.4.0 — 2026-03-20
 
 ### Added
