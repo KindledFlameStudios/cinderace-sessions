@@ -99,11 +99,20 @@ def friendly_auth_error(msg: str) -> str:
 # ── Internal helpers ────────────────────────────────────────────────
 
 def _read_json(url: str, headers: dict | None = None,
-               timeout: int = 15) -> dict:
-    """Fetch JSON from a URL with error handling."""
+               timeout: int = 15, max_bytes: int = 10 * 1024 * 1024) -> dict:
+    """Fetch JSON from a URL with error handling and size cap.
+
+    If the response exceeds max_bytes, logs a warning and falls back
+    to static models by raising a ValueError.
+    """
     req = urllib.request.Request(url, headers=headers or {})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
+        raw = resp.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            logger.warning("Response from %s exceeded %d bytes, falling back to static models",
+                           url, max_bytes)
+            raise ValueError(f"Response too large ({len(raw)} bytes)")
+        return json.loads(raw.decode())
 
 
 def _static_models(provider: str, msg: str = "") -> dict:

@@ -9,6 +9,7 @@ Ported from the TypeScript parser.ts with the same logic and edge cases.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from cinderace_sessions.parser.base import (
@@ -20,6 +21,8 @@ from cinderace_sessions.parser.base import (
     Turn,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def parse_jsonl_transcript(filepath: str) -> list[Turn]:
     """Parse a JSONL session file into a list of Turn objects.
@@ -30,6 +33,7 @@ def parse_jsonl_transcript(filepath: str) -> list[Turn]:
     Content is normalized: string → [{type: 'text', text: str}].
     """
     turns: list[Turn] = []
+    skipped_lines = 0
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:
@@ -41,6 +45,7 @@ def parse_jsonl_transcript(filepath: str) -> list[Turn]:
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError:
+                    skipped_lines += 1
                     continue
 
                 record_type = record.get("type", "")
@@ -90,6 +95,9 @@ def parse_jsonl_transcript(filepath: str) -> list[Turn]:
 
     except OSError:
         pass
+
+    if skipped_lines:
+        logger.warning("Skipped %d malformed JSON lines in %s", skipped_lines, filepath)
 
     return turns
 

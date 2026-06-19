@@ -5,6 +5,10 @@ import logging
 import os
 import subprocess
 import sys
+import time
+
+
+logger = logging.getLogger(__name__)
 
 
 def _configure_logging(level: int = logging.WARNING):
@@ -61,7 +65,12 @@ def launch_app_detached():
         popen_kwargs["start_new_session"] = True
 
     try:
-        return subprocess.Popen(command, **popen_kwargs)
+        proc = subprocess.Popen(command, **popen_kwargs)
+        # Give the child process a moment to start before closing the log handle
+        time.sleep(0.2)
+        if proc.poll() is not None:
+            logger.error("Detached app exited immediately with code %d", proc.returncode)
+        return proc
     finally:
         log_handle.close()
 

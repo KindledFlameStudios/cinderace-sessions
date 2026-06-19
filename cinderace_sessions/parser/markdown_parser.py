@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 from cinderace_sessions.parser.base import (
@@ -124,13 +125,11 @@ def parse_markdown_conversation(filepath: str) -> list[Turn]:
 def markdown_extract_meta(filepath: str) -> SessionMeta:
     """Extract metadata from a markdown conversation file."""
     meta = SessionMeta()
-    meta.session_id = Path(filepath if '.' in filepath else '').stem or "markdown-session"
+    meta.session_id = Path(filepath).stem or "markdown-session"
     meta.entrypoint = SessionEntrypoint.UNKNOWN
 
     try:
-        from pathlib import Path as P
-        stat = P(filepath).stat()
-        from datetime import datetime
+        stat = Path(filepath).stat()
         mtime = datetime.fromtimestamp(stat.st_mtime)
         meta.first_date = mtime.strftime("%Y-%m-%d")
     except (OSError, ValueError):

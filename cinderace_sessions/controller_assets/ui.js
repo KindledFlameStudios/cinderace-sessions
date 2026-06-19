@@ -484,10 +484,10 @@ async function exportSession() {
   if (!currentSession) { toast('Select a session first', 'error'); return; }
   const format = $('#exportFormat').value;
   const result = await callApi('export_session', currentSession.filepath, format);
-  if (result && !result.startsWith('Error:')) {
-    toast(`Exported to ${result}`, 'success');
+  if (result && result.success) {
+    toast(`Exported to ${result.path}`, 'success');
   } else {
-    toast(result || 'Export failed', 'error');
+    toast((result && result.error) || 'Export failed', 'error');
   }
 }
 

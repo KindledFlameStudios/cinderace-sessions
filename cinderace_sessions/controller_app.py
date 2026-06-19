@@ -13,8 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import webview
-
 from cinderace_sessions import __version__
 from cinderace_sessions.config import load_config, save_settings, load_custom_clis, save_custom_clis
 from cinderace_sessions.detector.registry import DetectorRegistry
@@ -132,18 +130,28 @@ class SessionsAPI:
         logger.warning("Rejected filepath not in session cache: %s", filepath)
         return None
 
+    def _get_session_record(self, filepath: str) -> dict | None:
+        """Validate filepath and return the matching session record.
+
+        Combines _validate_filepath with the cache lookup so callers
+        don't repeat the iteration pattern. Returns the session dict
+        or None if not found.
+        """
+        if not self._validate_filepath(filepath):
+            return None
+        for s in self._sessions_cache:
+            if s.get("filepath") == filepath:
+                return s
+        return None
+
     def get_session_detail(self, filepath: str) -> dict | None:
         """Return full parsed session data for preview."""
-        if not self._validate_filepath(filepath):
+        record = self._get_session_record(filepath)
+        if not record:
             logger.error("get_session_detail: unvalidated filepath rejected")
             return None
 
-        # Find the session info to determine source
-        source = "unknown"
-        for s in self._sessions_cache:
-            if s.get("filepath") == filepath:
-                source = s.get("cli_source", "unknown")
-                break
+        source = record.get("cli_source", "unknown")
 
         # Parse based on source
         turns, meta = self._parse_session(filepath, source)
@@ -186,21 +194,24 @@ class SessionsAPI:
 
     # ── Export ──────────────────────────────────────────────────────
 
-    def export_session(self, filepath: str, format: str) -> str | None:
-        """Export a session to the specified format. Returns output file path."""
-        if not self._validate_filepath(filepath):
-            logger.error("export_session: unvalidated filepath rejected")
-            return None
+    def export_session(self, filepath: str, format: str) -> dict:
+        """Export a session to the specified format.
 
-        source = "unknown"
-        for s in self._sessions_cache:
-            if s.get("filepath") == filepath:
-                source = s.get("cli_source", "unknown")
-                break
+        Returns a dict with:
+            success: bool
+            path: str — output file path on success
+            error: str — error message on failure
+        """
+        record = self._get_session_record(filepath)
+        if not record:
+            logger.error("export_session: unvalidated filepath rejected")
+            return {"success": False, "error": "Invalid filepath"}
+
+        source = record.get("cli_source", "unknown")
 
         turns, meta = self._parse_session(filepath, source)
         if turns is None:
-            return None
+            return {"success": False, "error": "Failed to parse session"}
 
         stats = build_stats(turns)
         config = load_config()
@@ -264,13 +275,13 @@ class SessionsAPI:
                     f.write(zip_bytes)
 
             else:
-                return None
+                return {"success": False, "error": f"Unknown format: {format}"}
 
-            return out_path
+            return {"success": True, "path": out_path}
 
         except Exception as e:
             logger.error("Export failed for %s: %s", filepath, e, exc_info=True)
-            return f"Error: {str(e)}"
+            return {"success": False, "error": str(e)}
 
     # ── ember-memory Bridge ──────────────────────────────────────────
 
@@ -306,11 +317,11 @@ class SessionsAPI:
             logger.error("ingest_session: unvalidated filepath rejected")
             return {"success": False, "error": "Invalid filepath"}
 
-        source = "unknown"
-        for s in self._sessions_cache:
-            if s.get("filepath") == filepath:
-                source = s.get("cli_source", "unknown")
-                break
+        record = self._get_session_record(filepath)
+        if not record:
+            return {"success": False, "error": "Invalid filepath"}
+
+        source = record.get("cli_source", "unknown")
 
         turns, meta = self._parse_session(filepath, source)
         if turns is None:
@@ -383,6 +394,7 @@ class SessionsAPI:
 
     def browse_directory(self) -> str | None:
         """Open a directory picker dialog."""
+        import webview
         if self._window:
             result = self._window.create_file_dialog(
                 webview.FOLDER_DIALOG,
@@ -494,11 +506,11 @@ class SessionsAPI:
         custom_url = config.get("summarizer_custom_url", "")
 
         # Find and parse the session
-        source = "unknown"
-        for s in self._sessions_cache:
-            if s.get("filepath") == filepath:
-                source = s.get("cli_source", "unknown")
-                break
+        record = self._get_session_record(filepath)
+        if not record:
+            return {"success": False, "error": "Invalid session filepath", "content": ""}
+
+        source = record.get("cli_source", "unknown")
 
         turns, meta = self._parse_session(filepath, source)
         if turns is None:
@@ -719,6 +731,7 @@ class SessionsAPI:
 
 def run_gui():
     """Create and run the pywebview window."""
+    import webview
     from cinderace_sessions.single_instance import acquire_instance_lock
 
     lock = acquire_instance_lock("controller")

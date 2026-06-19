@@ -94,14 +94,8 @@ class OllamaProvider(LLMProvider):
 
     def list_models(self) -> list[str]:
         """List available Ollama model names."""
-        try:
-            resp = requests.get(f"{self._base_url}/api/tags", timeout=5)
-            if resp.status_code != 200:
-                return []
-            models = resp.json().get("models", [])
-            return [m.get("name", "") for m in models]
-        except Exception:
-            return []
+        result = list_models(url=self._base_url)
+        return result if result is not None else []
 
 
 def list_models(url: str = "") -> list[str] | None:
